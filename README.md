@@ -1,2 +1,32 @@
-# Digital-Logbook
-Remplacer le cahier papier par une application tablette (Android) permettant de saisir une remise en quelques secondes — objet, bénéficiaire, détails, signature — avec une consultation possible depuis un site web pour les personnes habilitées de la DSI.
+# Transmission Numérique — V1
+
+Version 1 du projet : **page de connexion uniquement**.
+
+## Stack
+- Flutter
+- Dart
+
+## Lancer le projet
+
+```bash
+flutter pub get
+flutter run
+```
+
+Pour générer l'application Android :
+
+```bash
+flutter build apk
+```
+
+## V1
+
+La V1 contient uniquement :
+- écran de connexion ;
+- champ identifiant ;
+- champ mot de passe ;
+- bouton « Se connecter » ;
+- affichage/masquage du mot de passe ;
+- validation basique des champs.
+
+L'authentification backend n'est pas encore connectée.
