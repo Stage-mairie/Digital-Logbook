@@ -161,32 +161,18 @@ class _LoginPageState extends State<LoginPage> {
                   child: Column(
                     children: [
                       // LOGO
-                      Container(
-                        width: 180,
-                        height: 120,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: primary.withOpacity(0.10),
-                              blurRadius: 25,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
-                        ),
-                        child: Image.asset(
-                          'assets/images/logo_saint_andre.png',
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) {
-                            return const Icon(
-                              Icons.account_balance,
-                              size: 55,
-                              color: primary,
-                            );
-                          },
-                        ),
+                      Image.asset(
+                        'assets/images/logo_saint_andre.png',
+                        width: 480,
+                        height: 420,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) {
+                          return const Icon(
+                            Icons.account_balance,
+                            size: 60,
+                            color: primary,
+                          );
+                        },
                       ),
 
                       const SizedBox(height: 28),

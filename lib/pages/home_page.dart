@@ -1,6 +1,9 @@
 ﻿import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import 'login_page.dart';
+import 'nouvelle_transmission_page.dart';
+import 'cahier_page.dart';
+import 'recherche_page.dart';
 
 class HomePage extends StatelessWidget {
   final AuthService auth;
@@ -20,7 +23,6 @@ class HomePage extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF6FBFC),
 
-      // BARRE DU HAUT
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -31,6 +33,7 @@ class HomePage extends StatelessWidget {
             Image.asset(
               'assets/images/logo_saint_andre.png',
               height: 48,
+              fit: BoxFit.contain,
               errorBuilder: (_, __, ___) {
                 return const Icon(
                   Icons.account_balance,
@@ -54,11 +57,12 @@ class HomePage extends StatelessWidget {
         ),
       ),
 
-      // CONTENU
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(30),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(30, 20, 30, 30),
+
+          child: Align(
+            alignment: Alignment.topCenter,
 
             child: ConstrainedBox(
               constraints: const BoxConstraints(
@@ -77,9 +81,8 @@ class HomePage extends StatelessWidget {
                     ),
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
 
-                  // ACTIONS
                   LayoutBuilder(
                     builder: (context, constraints) {
                       final width = constraints.maxWidth;
@@ -98,8 +101,15 @@ class HomePage extends StatelessWidget {
                             title: 'Nouvelle transmission',
                             color: primary,
                             onTap: () {
-                              // TODO : ouvrir la page
-                              // de nouvelle transmission
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      NouvelleTransmissionPage(
+                                    auth: auth,
+                                  ),
+                                ),
+                              );
                             },
                           ),
 
@@ -109,7 +119,14 @@ class HomePage extends StatelessWidget {
                             title: 'Consulter le cahier',
                             color: blue,
                             onTap: () {
-                              // TODO : ouvrir le cahier
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => CahierPage(
+                                    auth: auth,
+                                  ),
+                                ),
+                              );
                             },
                           ),
 
@@ -119,7 +136,14 @@ class HomePage extends StatelessWidget {
                             title: 'Rechercher',
                             color: cyan,
                             onTap: () {
-                              // TODO : ouvrir la recherche
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => RecherchePage(
+                                    auth: auth,
+                                  ),
+                                ),
+                              );
                             },
                           ),
 
@@ -133,13 +157,14 @@ class HomePage extends StatelessWidget {
 
                               if (!context.mounted) return;
 
-                              Navigator.pushReplacement(
+                              Navigator.pushAndRemoveUntil(
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => LoginPage(
                                     auth: auth,
                                   ),
                                 ),
+                                (route) => false,
                               );
                             },
                           ),
