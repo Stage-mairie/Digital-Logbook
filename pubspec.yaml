@@ -1,5 +1,5 @@
 name: transmission_numerique
-description: Application de transmission numérique - V1
+description: Application de transmission numÃ©rique - V1
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -11,6 +11,8 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.8
+  http: ^1.6.0
+  flutter_secure_storage: ^11.2.0
 
 dev_dependencies:
   flutter_test:
@@ -19,3 +21,4 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+

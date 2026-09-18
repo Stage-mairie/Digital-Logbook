@@ -1,0 +1,4 @@
+﻿node_modules/
+.env
+vault/*.enc
+data/*.json
