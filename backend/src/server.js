@@ -1,203 +1,131 @@
-﻿import express from 'express';
+import express from 'express';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import argon2 from 'argon2';
+
+import {
+    checkDatabase,
+    ensureDatabaseSchema,
+    query
+} from './db.js';
 
 dotenv.config();
 
 const app = express();
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const PORT = Number(process.env.PORT || 3000);
+const SESSION_DAYS = Number(process.env.SESSION_DAYS || 180);
+const SECRET = process.env.VAULT_SECRET;
 
-app.use(express.json());
-
-const PORT =
-    Number(process.env.PORT || 3000);
-
-const SESSION_DAYS =
-    Number(process.env.SESSION_DAYS || 180);
-
-const SECRET =
-    process.env.VAULT_SECRET;
+const configuredCorsOrigins = String(
+    process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || ''
+)
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
 
 if (!SECRET) {
-
-    throw new Error(
-        'VAULT_SECRET manquant dans .env'
-    );
+    throw new Error('VAULT_SECRET manquant dans .env');
 }
 
-// ------------------------------------------------------------
-// CLE DE CHIFFREMENT
-// ------------------------------------------------------------
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const backendRoot = path.resolve(__dirname, '..');
 
-const encryptionKey =
-    crypto
-        .createHash('sha256')
-        .update(SECRET)
-        .digest();
+const vaultPath = path.join(backendRoot, 'vault', 'users.vault.enc');
 
 // ------------------------------------------------------------
-// FICHIERS
+// MIDDLEWARES
 // ------------------------------------------------------------
 
-const vaultPath =
-    path.resolve(
-        'vault/users.vault.enc'
-    );
+app.use(express.json({ limit: '1mb' }));
 
-const sessionsPath =
-    path.resolve(
-        'data/sessions.json'
-    );
+app.disable('x-powered-by');
 
-// ------------------------------------------------------------
-// AES-256-GCM
-// ------------------------------------------------------------
+// Flutter Web a besoin de CORS. En développement, les origines localhost sont
+// acceptées automatiquement. En production, seules les origines explicitement
+// listées dans CORS_ORIGINS sont autorisées. Les applications Android natives
+// ne sont pas concernées par CORS car elles n'envoient pas d'en-tête Origin.
+app.use((request, response, next) => {
+    const origin = request.headers.origin;
+    const isLocalOrigin =
+        NODE_ENV !== 'production' &&
+        typeof origin === 'string' &&
+        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
 
-function encrypt(text) {
+    const isConfiguredOrigin =
+        typeof origin === 'string' &&
+        configuredCorsOrigins.includes(origin);
 
-    const iv =
-        crypto.randomBytes(12);
-
-    const cipher =
-        crypto.createCipheriv(
-            'aes-256-gcm',
-            encryptionKey,
-            iv
+    if (origin && (isLocalOrigin || isConfiguredOrigin)) {
+        response.setHeader('Access-Control-Allow-Origin', origin);
+        response.setHeader('Vary', 'Origin');
+        response.setHeader(
+            'Access-Control-Allow-Headers',
+            'Content-Type, Authorization'
         );
+        response.setHeader(
+            'Access-Control-Allow-Methods',
+            'GET, POST, PATCH, OPTIONS'
+        );
+    }
 
-    const encrypted =
-        Buffer.concat([
-            cipher.update(
-                text,
-                'utf8'
-            ),
-            cipher.final()
-        ]);
+    if (request.method === 'OPTIONS') {
+        if (origin && !(isLocalOrigin || isConfiguredOrigin)) {
+            return response.status(403).json({ error: 'Origine non autorisée.' });
+        }
+        return response.sendStatus(204);
+    }
 
-    const tag =
-        cipher.getAuthTag();
+    next();
+});
 
-    return JSON.stringify({
+// ------------------------------------------------------------
+// CHIFFREMENT DU VAULT
+// ------------------------------------------------------------
 
-        iv:
-            iv.toString('base64'),
-
-        tag:
-            tag.toString('base64'),
-
-        data:
-            encrypted.toString('base64')
-    });
-}
+const encryptionKey = crypto
+    .createHash('sha256')
+    .update(SECRET)
+    .digest();
 
 function decrypt(payload) {
+    const object = JSON.parse(payload);
 
-    const object =
-        JSON.parse(payload);
-
-    const decipher =
-        crypto.createDecipheriv(
-            'aes-256-gcm',
-            encryptionKey,
-            Buffer.from(
-                object.iv,
-                'base64'
-            )
-        );
-
-    decipher.setAuthTag(
-        Buffer.from(
-            object.tag,
-            'base64'
-        )
+    const decipher = crypto.createDecipheriv(
+        'aes-256-gcm',
+        encryptionKey,
+        Buffer.from(object.iv, 'base64')
     );
 
+    decipher.setAuthTag(Buffer.from(object.tag, 'base64'));
+
     return Buffer.concat([
-
-        decipher.update(
-            Buffer.from(
-                object.data,
-                'base64'
-            )
-        ),
-
+        decipher.update(Buffer.from(object.data, 'base64')),
         decipher.final()
-
     ]).toString('utf8');
 }
 
-// ------------------------------------------------------------
-// VAULT
-// ------------------------------------------------------------
-
 function readVault() {
-
     return JSON.parse(
         decrypt(
-            fs.readFileSync(
-                vaultPath,
-                'utf8'
-            )
+            fs.readFileSync(vaultPath, 'utf8')
         )
     );
 }
 
 // ------------------------------------------------------------
-// SESSIONS
+// SESSIONS POSTGRESQL
 // ------------------------------------------------------------
+// Les sessions sont elles aussi centralisées dans PostgreSQL. Ainsi, toutes
+// les tablettes et tous les navigateurs qui utilisent le même backend partagent
+// la même source de vérité, et plusieurs instances du backend peuvent fonctionner
+// sans dépendre d'un fichier sessions.json local.
 
-function readSessions() {
-
-    if (!fs.existsSync(
-        sessionsPath
-    )) {
-
-        return {};
-    }
-
-    return JSON.parse(
-        fs.readFileSync(
-            sessionsPath,
-            'utf8'
-        )
-    );
-}
-
-function writeSessions(
-    sessions
-) {
-
-    fs.mkdirSync(
-        path.dirname(
-            sessionsPath
-        ),
-        {
-            recursive: true
-        }
-    );
-
-    fs.writeFileSync(
-
-        sessionsPath,
-
-        JSON.stringify(
-            sessions,
-            null,
-            2
-        )
-    );
-}
-
-// ------------------------------------------------------------
-// TOKEN
-// ------------------------------------------------------------
-
-function hashToken(
-    token
-) {
-
+function hashToken(token) {
     return crypto
         .createHash('sha256')
         .update(token)
@@ -205,276 +133,499 @@ function hashToken(
 }
 
 function generateToken() {
+    return crypto.randomBytes(48).toString('base64url');
+}
 
-    return crypto
-        .randomBytes(48)
-        .toString('base64url');
+async function findValidSession(token) {
+    if (!token) {
+        return null;
+    }
+
+    const result = await query(
+        `
+        SELECT user_id, created_at, expires_at
+        FROM sessions
+        WHERE token_hash = $1
+          AND expires_at > NOW()
+        `,
+        [hashToken(token)]
+    );
+
+    if (result.rowCount === 0) {
+        return null;
+    }
+
+    const row = result.rows[0];
+    return {
+        userId: row.user_id,
+        createdAt: row.created_at,
+        expiresAt: row.expires_at
+    };
+}
+
+async function requireSession(request, response, next) {
+    const authorization = request.headers.authorization || '';
+    const [scheme, token] = authorization.split(' ');
+
+    if (scheme?.toLowerCase() !== 'bearer' || !token) {
+        return response.status(401).json({ error: 'Session manquante.' });
+    }
+
+    const session = await findValidSession(token);
+
+    if (!session) {
+        return response.status(401).json({ error: 'Session invalide ou expirée.' });
+    }
+
+    const vault = readVault();
+    const user = vault.users.find((item) => item.id === session.userId);
+
+    if (!user) {
+        return response.status(401).json({ error: 'Utilisateur introuvable.' });
+    }
+
+    request.session = session;
+    request.user = user;
+    next();
+}
+
+function rowToTransmission(row) {
+    return {
+        id: row.id,
+        type: row.type,
+        equipmentType: row.equipment_type,
+        equipmentModel: row.equipment_model,
+        customEquipment: row.custom_equipment,
+        quantity: row.quantity,
+        beneficiary: row.beneficiary,
+        content: row.content,
+        author: row.author,
+        authorId: row.author_id,
+        loanStatus: row.loan_status ?? (row.type === 'pret' ? 'en_cours' : null),
+        returnedAt: row.returned_at,
+        returnedBy: row.returned_by,
+        returnedById: row.returned_by_id,
+        createdAt: row.created_at
+    };
 }
 
 // ------------------------------------------------------------
 // HEALTH CHECK
 // ------------------------------------------------------------
 
-app.get(
-    '/health',
-    (_, response) => {
-
+app.get('/health', async (_, response) => {
+    try {
+        await checkDatabase();
         response.json({
-
             ok: true,
-
-            service:
-                'Digital-Logbook Auth'
+            service: 'Digital-Logbook Auth',
+            database: 'connected'
+        });
+    } catch (error) {
+        console.error('Health check PostgreSQL:', error);
+        response.status(503).json({
+            ok: false,
+            service: 'Digital-Logbook Auth',
+            database: 'disconnected'
         });
     }
-);
+});
 
 // ------------------------------------------------------------
-// LOGIN
+// AUTH
 // ------------------------------------------------------------
 
-app.post(
-    '/auth/login',
-    async (request, response) => {
+app.post('/auth/login', async (request, response) => {
+    const { identifier, password } = request.body || {};
 
-        const {
-            identifier,
-            password
-        } = request.body || {};
+    if (!identifier || !password) {
+        return response.status(400).json({
+            error: 'Identifiant et mot de passe requis.'
+        });
+    }
 
-        if (!identifier ||
-            !password) {
+    const vault = readVault();
+    const user = vault.users.find(
+        (item) =>
+            item.identifier.toLowerCase() ===
+            String(identifier).toLowerCase()
+    );
 
-            return response
-                .status(400)
-                .json({
+    if (!user) {
+        return response.status(401).json({ error: 'Identifiants invalides.' });
+    }
 
-                    error:
-                        'Identifiant et mot de passe requis.'
-                });
-        }
+    const passwordValid = await argon2.verify(user.passwordHash, password);
 
-        const vault =
-            readVault();
+    if (!passwordValid) {
+        return response.status(401).json({ error: 'Identifiants invalides.' });
+    }
 
-        const user =
-            vault.users.find(
+    const token = generateToken();
 
-                item =>
-                    item.identifier
-                        .toLowerCase()
-                    ===
-                    String(identifier)
-                        .toLowerCase()
-            );
+    await query(
+        `
+        INSERT INTO sessions (token_hash, user_id, created_at, expires_at)
+        VALUES (
+            $1,
+            $2,
+            NOW(),
+            NOW() + ($3::integer * INTERVAL '1 day')
+        )
+        `,
+        [hashToken(token), user.id, SESSION_DAYS]
+    );
 
-        if (!user) {
+    response.json({
+        ok: true,
+        user: {
+            id: user.id,
+            identifier: user.identifier,
+            name: user.name
+        },
+        refreshToken: token,
+        expiresInDays: SESSION_DAYS
+    });
+});
 
-            return response
-                .status(401)
-                .json({
+app.post('/auth/refresh', async (request, response) => {
+    const token = request.body?.refreshToken;
+    const session = await findValidSession(token);
 
-                    error:
-                        'Identifiants invalides.'
-                });
-        }
+    if (!session) {
+        return response.status(401).json({
+            error: 'Session invalide ou expirée.'
+        });
+    }
 
-        const passwordValid =
-            await argon2.verify(
-                user.passwordHash,
-                password
-            );
+    response.json({
+        ok: true,
+        expiresAt: session.expiresAt
+    });
+});
 
-        if (!passwordValid) {
+app.post('/auth/logout', async (request, response) => {
+    const token = request.body?.refreshToken;
 
-            return response
-                .status(401)
-                .json({
-
-                    error:
-                        'Identifiants invalides.'
-                });
-        }
-
-        // Token aléatoire.
-        const token =
-            generateToken();
-
-        const sessions =
-            readSessions();
-
-        // On ne stocke jamais le token
-        // en clair côté serveur.
-
-        sessions[
-            hashToken(token)
-        ] = {
-
-            userId:
-                user.id,
-
-            createdAt:
-                Date.now(),
-
-            expiresAt:
-                Date.now()
-                +
-                SESSION_DAYS
-                *
-                24
-                *
-                60
-                *
-                60
-                *
-                1000
-        };
-
-        writeSessions(
-            sessions
+    if (token) {
+        await query(
+            'DELETE FROM sessions WHERE token_hash = $1',
+            [hashToken(token)]
         );
+    }
 
-        response.json({
+    response.json({ ok: true });
+});
 
-            ok: true,
+// ------------------------------------------------------------
+// CATALOGUE DE MATERIEL
+// ------------------------------------------------------------
 
-            user: {
+app.get('/equipment-catalog', requireSession, async (request, response) => {
+    const type = String(request.query.type || '').trim().toLowerCase();
 
-                id:
-                    user.id,
-
-                identifier:
-                    user.identifier,
-
-                name:
-                    user.name
-            },
-
-            refreshToken:
-                token,
-
-            expiresInDays:
-                SESSION_DAYS
+    if (!['don', 'pret'].includes(type)) {
+        return response.status(400).json({
+            error: 'Le paramètre type doit être "don" ou "pret".'
         });
     }
-);
+
+    const result = await query(
+        `
+        SELECT category, model
+        FROM equipment_catalog
+        WHERE transaction_type = $1
+          AND active = TRUE
+        ORDER BY sort_order ASC, category ASC, model ASC
+        `,
+        [type]
+    );
+
+    const grouped = new Map();
+
+    for (const row of result.rows) {
+        if (!grouped.has(row.category)) {
+            grouped.set(row.category, {
+                category: row.category,
+                models: []
+            });
+        }
+
+        if (row.model) {
+            grouped.get(row.category).models.push(row.model);
+        }
+    }
+
+    response.json({
+        ok: true,
+        items: [...grouped.values()]
+    });
+});
 
 // ------------------------------------------------------------
-// REFRESH SESSION
+// TRANSMISSIONS
 // ------------------------------------------------------------
 
-app.post(
-    '/auth/refresh',
-    (request, response) => {
+app.get('/transmissions', requireSession, async (request, response) => {
+    const search = String(request.query.q || '').trim();
+    const daysRaw = request.query.days;
+    const days = daysRaw === undefined ? null : Number(daysRaw);
 
-        const token =
-            request.body?.refreshToken;
+    if (days !== null && (!Number.isInteger(days) || days <= 0 || days > 36500)) {
+        return response.status(400).json({ error: 'Paramètre days invalide.' });
+    }
 
-        if (!token) {
+    const conditions = [];
+    const params = [];
 
-            return response
-                .status(401)
-                .json({
+    if (days !== null) {
+        params.push(days);
+        conditions.push(
+            `created_at >= NOW() - ($${params.length}::integer * INTERVAL '1 day')`
+        );
+    }
 
-                    error:
-                        'Token manquant.'
-                });
-        }
+    if (search) {
+        params.push(`%${search}%`);
+        conditions.push(`
+            CONCAT_WS(
+                ' ',
+                type,
+                equipment_type,
+                COALESCE(equipment_model, ''),
+                COALESCE(custom_equipment, ''),
+                beneficiary,
+                content,
+                author,
+                COALESCE(loan_status, '')
+            ) ILIKE $${params.length}
+        `);
+    }
 
-        const sessions =
-            readSessions();
+    const where = conditions.length > 0
+        ? `WHERE ${conditions.join(' AND ')}`
+        : '';
 
-        const tokenKey =
-            hashToken(token);
+    const result = await query(
+        `
+        SELECT *
+        FROM transmissions
+        ${where}
+        ORDER BY created_at DESC
+        `,
+        params
+    );
 
-        const session =
-            sessions[tokenKey];
+    response.json({
+        ok: true,
+        count: result.rowCount,
+        items: result.rows.map(rowToTransmission)
+    });
+});
 
-        if (!session) {
+app.post('/transmissions', requireSession, async (request, response) => {
+    const type = String(request.body?.type || '').trim().toLowerCase();
+    const equipmentType = String(request.body?.equipmentType || '').trim();
+    const equipmentModel = String(request.body?.equipmentModel || '').trim();
+    const customEquipment = String(request.body?.customEquipment || '').trim();
+    const beneficiary = String(request.body?.beneficiary || '').trim();
+    const content = String(request.body?.content || '').trim();
+    const quantity = Number(request.body?.quantity);
 
-            return response
-                .status(401)
-                .json({
-
-                    error:
-                        'Session invalide.'
-                });
-        }
-
-        if (
-            session.expiresAt
-            <=
-            Date.now()
-        ) {
-
-            delete sessions[
-                tokenKey
-            ];
-
-            writeSessions(
-                sessions
-            );
-
-            return response
-                .status(401)
-                .json({
-
-                    error:
-                        'Session expirée.'
-                });
-        }
-
-        response.json({
-
-            ok: true,
-
-            expiresAt:
-                session.expiresAt
+    if (!['don', 'pret'].includes(type)) {
+        return response.status(400).json({
+            error: 'Le type doit être "don" ou "pret".'
         });
     }
-);
 
-// ------------------------------------------------------------
-// LOGOUT
-// ------------------------------------------------------------
-
-app.post(
-    '/auth/logout',
-    (request, response) => {
-
-        const token =
-            request.body?.refreshToken;
-
-        if (token) {
-
-            const sessions =
-                readSessions();
-
-            delete sessions[
-                hashToken(token)
-            ];
-
-            writeSessions(
-                sessions
-            );
-        }
-
-        response.json({
-            ok: true
+    if (!equipmentType) {
+        return response.status(400).json({
+            error: 'Le matériel est obligatoire.'
         });
     }
-);
+
+    const catalog = await query(
+        `
+        SELECT category, model
+        FROM equipment_catalog
+        WHERE transaction_type = $1
+          AND category = $2
+          AND active = TRUE
+        `,
+        [type, equipmentType]
+    );
+
+    if (catalog.rowCount === 0) {
+        return response.status(400).json({
+            error: 'Le matériel sélectionné n’est pas présent dans le catalogue.'
+        });
+    }
+
+    const availableModels = catalog.rows
+        .map((row) => row.model)
+        .filter(Boolean);
+
+    if (availableModels.length > 0) {
+        if (!equipmentModel) {
+            return response.status(400).json({
+                error: 'Sélectionnez un modèle pour ce matériel.'
+            });
+        }
+
+        if (!availableModels.includes(equipmentModel)) {
+            return response.status(400).json({
+                error: 'Le modèle sélectionné n’est pas valide.'
+            });
+        }
+    }
+
+    if (equipmentType === 'Autre' && !customEquipment) {
+        return response.status(400).json({
+            error: 'Précisez le matériel lorsque vous choisissez "Autre".'
+        });
+    }
+
+    if (!Number.isInteger(quantity) || quantity <= 0 || quantity > 999) {
+        return response.status(400).json({
+            error: 'La quantité doit être comprise entre 1 et 999.'
+        });
+    }
+
+    if (!beneficiary) {
+        return response.status(400).json({
+            error: 'Le bénéficiaire est obligatoire.'
+        });
+    }
+
+    if (
+        equipmentModel.length > 80 ||
+        customEquipment.length > 80 ||
+        beneficiary.length > 120 ||
+        content.length > 1000
+    ) {
+        return response.status(400).json({
+            error: 'Une ou plusieurs valeurs dépassent la taille autorisée.'
+        });
+    }
+
+    const loanStatus = type === 'pret' ? 'en_cours' : null;
+
+    const result = await query(
+        `
+        INSERT INTO transmissions (
+            id,
+            type,
+            equipment_type,
+            equipment_model,
+            custom_equipment,
+            quantity,
+            beneficiary,
+            content,
+            author,
+            author_id,
+            loan_status,
+            created_at
+        )
+        VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW()
+        )
+        RETURNING *
+        `,
+        [
+            crypto.randomUUID(),
+            type,
+            equipmentType,
+            availableModels.length > 0 ? equipmentModel : null,
+            equipmentType === 'Autre' ? customEquipment : null,
+            quantity,
+            beneficiary,
+            content,
+            request.user.name || request.user.identifier,
+            request.user.id,
+            loanStatus
+        ]
+    );
+
+    response.status(201).json({
+        ok: true,
+        item: rowToTransmission(result.rows[0])
+    });
+});
+
+app.patch('/transmissions/:id/return', requireSession, async (request, response) => {
+    const id = String(request.params.id || '').trim();
+
+    const result = await query(
+        `
+        UPDATE transmissions
+        SET
+            loan_status = 'rendu',
+            returned_at = NOW(),
+            returned_by = $2,
+            returned_by_id = $3
+        WHERE id = $1
+          AND type = 'pret'
+          AND (loan_status = 'en_cours' OR loan_status IS NULL)
+        RETURNING *
+        `,
+        [
+            id,
+            request.user.name || request.user.identifier,
+            request.user.id
+        ]
+    );
+
+    if (result.rowCount === 0) {
+        return response.status(404).json({
+            error: 'Prêt introuvable ou déjà rendu.'
+        });
+    }
+
+    response.json({
+        ok: true,
+        item: rowToTransmission(result.rows[0])
+    });
+});
+
+// ------------------------------------------------------------
+// GESTION DES ERREURS
+// ------------------------------------------------------------
+
+app.use((error, request, response, next) => {
+    console.error(error);
+
+    if (response.headersSent) {
+        return next(error);
+    }
+
+    response.status(500).json({
+        error: 'Erreur interne du serveur.'
+    });
+});
 
 // ------------------------------------------------------------
 // START SERVER
 // ------------------------------------------------------------
 
-app.listen(
-    PORT,
-    () => {
+async function startServer() {
+    await ensureDatabaseSchema();
+    await checkDatabase();
+    await query('DELETE FROM sessions WHERE expires_at <= NOW()');
 
+    app.listen(PORT, '0.0.0.0', () => {
         console.log(
-            `Digital-Logbook Auth démarré sur http://localhost:${PORT}`
+            `Digital-Logbook Auth démarré sur le port ${PORT} (${NODE_ENV})`
         );
-    }
-);
+        console.log('PostgreSQL connecté.');
+        if (NODE_ENV === 'production') {
+            console.log(
+                `Origines Web autorisées : ${configuredCorsOrigins.join(', ') || 'aucune'}`
+            );
+        }
+    });
+}
+
+startServer().catch((error) => {
+    console.error('Impossible de démarrer le backend :', error);
+    process.exit(1);
+});

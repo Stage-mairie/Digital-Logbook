@@ -9,3 +9,7 @@ coverage/
 .idea/
 .vscode/
 *.iml
+ios/
+linux/
+macos/
+windows/

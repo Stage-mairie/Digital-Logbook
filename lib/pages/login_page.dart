@@ -1,6 +1,9 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+
 import '../services/auth_service.dart';
 import 'home_page.dart';
+import 'web/historique_web_page.dart';
 
 class LoginPage extends StatefulWidget {
   final AuthService auth;
@@ -23,8 +26,6 @@ class _LoginPageState extends State<LoginPage> {
   String? _errorMessage;
 
   static const Color primary = Color(0xFF2D9595);
-  static const Color blue = Color(0xFF5EA0D9);
-  static const Color cyan = Color(0xFF70C1D1);
   static const Color green = Color(0xFF88D8C0);
 
   Future<void> _login() async {
@@ -55,7 +56,9 @@ class _LoginPageState extends State<LoginPage> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => HomePage(auth: widget.auth),
+            builder: (_) => kIsWeb
+                ? HistoriqueWebPage(auth: widget.auth)
+                : HomePage(auth: widget.auth),
           ),
         );
       } else {
@@ -63,12 +66,11 @@ class _LoginPageState extends State<LoginPage> {
           _errorMessage = 'Identifiant ou mot de passe incorrect.';
         });
       }
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
 
       setState(() {
-        _errorMessage =
-            'Impossible de contacter le serveur.\n'
+        _errorMessage = 'Impossible de contacter le serveur.\n'
             'Vérifiez que le backend est démarré.';
       });
     } finally {
@@ -104,16 +106,11 @@ class _LoginPageState extends State<LoginPage> {
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(
-          color: Color(0xFFE0F1F3),
-        ),
+        borderSide: const BorderSide(color: Color(0xFFE0F1F3)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(
-          color: primary,
-          width: 2,
-        ),
+        borderSide: const BorderSide(color: primary, width: 2),
       ),
     );
   }
@@ -137,7 +134,6 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ),
             ),
-
             Positioned(
               bottom: -120,
               left: -100,
@@ -150,21 +146,17 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ),
             ),
-
             Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(30),
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: 520,
-                  ),
+                  constraints: const BoxConstraints(maxWidth: 520),
                   child: Column(
                     children: [
-                      // LOGO
                       Image.asset(
                         'assets/images/logo_saint_andre.png',
-                        width: 480,
-                        height: 420,
+                        width: kIsWeb ? 340 : 420,
+                        height: kIsWeb ? 220 : 320,
                         fit: BoxFit.contain,
                         errorBuilder: (_, __, ___) {
                           return const Icon(
@@ -174,9 +166,7 @@ class _LoginPageState extends State<LoginPage> {
                           );
                         },
                       ),
-
-                      const SizedBox(height: 28),
-
+                      const SizedBox(height: 20),
                       const Text(
                         'Cahier de transmission',
                         textAlign: TextAlign.center,
@@ -186,9 +176,7 @@ class _LoginPageState extends State<LoginPage> {
                           color: Color(0xFF214B55),
                         ),
                       ),
-
                       const SizedBox(height: 8),
-
                       const Text(
                         'Ville de Saint-André',
                         style: TextStyle(
@@ -196,10 +184,7 @@ class _LoginPageState extends State<LoginPage> {
                           color: Color(0xFF62818A),
                         ),
                       ),
-
                       const SizedBox(height: 30),
-
-                      // CARTE
                       Container(
                         padding: const EdgeInsets.all(30),
                         decoration: BoxDecoration(
@@ -224,18 +209,16 @@ class _LoginPageState extends State<LoginPage> {
                                 color: Color(0xFF214B55),
                               ),
                             ),
-
                             const SizedBox(height: 8),
-
-                            const Text(
-                              'Connectez-vous pour accéder au cahier.',
-                              style: TextStyle(
+                            Text(
+                              kIsWeb
+                                  ? 'Connectez-vous pour consulter l’historique complet.'
+                                  : 'Connectez-vous pour accéder au cahier.',
+                              style: const TextStyle(
                                 color: Color(0xFF78939A),
                               ),
                             ),
-
                             const SizedBox(height: 25),
-
                             TextField(
                               controller: _usernameController,
                               decoration: _decoration(
@@ -243,9 +226,7 @@ class _LoginPageState extends State<LoginPage> {
                                 Icons.person_outline,
                               ),
                             ),
-
                             const SizedBox(height: 16),
-
                             TextField(
                               controller: _passwordController,
                               obscureText: _obscurePassword,
@@ -262,16 +243,13 @@ class _LoginPageState extends State<LoginPage> {
                                   ),
                                   onPressed: () {
                                     setState(() {
-                                      _obscurePassword =
-                                          !_obscurePassword;
+                                      _obscurePassword = !_obscurePassword;
                                     });
                                   },
                                 ),
                               ),
                             ),
-
                             const SizedBox(height: 18),
-
                             if (_errorMessage != null)
                               Container(
                                 padding: const EdgeInsets.all(14),
@@ -290,15 +268,12 @@ class _LoginPageState extends State<LoginPage> {
                                     Expanded(
                                       child: Text(
                                         _errorMessage!,
-                                        style: const TextStyle(
-                                          color: Colors.red,
-                                        ),
+                                        style: const TextStyle(color: Colors.red),
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-
                             SizedBox(
                               height: 56,
                               child: ElevatedButton(
@@ -308,16 +283,14 @@ class _LoginPageState extends State<LoginPage> {
                                   foregroundColor: Colors.white,
                                   elevation: 0,
                                   shape: RoundedRectangleBorder(
-                                    borderRadius:
-                                        BorderRadius.circular(16),
+                                    borderRadius: BorderRadius.circular(16),
                                   ),
                                 ),
                                 child: _loading
                                     ? const SizedBox(
                                         width: 24,
                                         height: 24,
-                                        child:
-                                            CircularProgressIndicator(
+                                        child: CircularProgressIndicator(
                                           color: Colors.white,
                                           strokeWidth: 2,
                                         ),
@@ -334,9 +307,7 @@ class _LoginPageState extends State<LoginPage> {
                                             ),
                                           ),
                                           SizedBox(width: 10),
-                                          Icon(
-                                            Icons.arrow_forward,
-                                          ),
+                                          Icon(Icons.arrow_forward),
                                         ],
                                       ),
                               ),
@@ -344,7 +315,6 @@ class _LoginPageState extends State<LoginPage> {
                           ],
                         ),
                       ),
-
                       const SizedBox(height: 24),
                     ],
                   ),

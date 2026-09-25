@@ -177,6 +177,7 @@ cd "C:\Users\semalbrouc\Desktop\Digital-Logbook"
 Puis :
 
 ```powershell
+flutter create .
 flutter run
 ```
 

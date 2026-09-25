@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "digital-logbook-auth",
   "version": "1.0.0",
   "private": true,
@@ -6,11 +6,14 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "create-vault": "node src/create-vault.js"
+    "create-vault": "node src/create-vault.js",
+    "db:init": "node src/init-db.js",
+    "db:seed-demo": "node src/seed-demo.js"
   },
   "dependencies": {
     "argon2": "^0.44.0",
     "dotenv": "^17.2.2",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "pg": "^8.23.0"
   }
 }
