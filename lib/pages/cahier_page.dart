@@ -322,6 +322,15 @@ class TransmissionCard extends StatelessWidget {
             if (transmission.content.trim().isNotEmpty) ...[
               const SizedBox(height: 14),
               Text(
+                isDonation ? 'Commentaire du don' : 'Commentaire du prêt',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF62818A),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
                 transmission.content,
                 style: const TextStyle(
                   height: 1.45,
@@ -329,21 +338,57 @@ class TransmissionCard extends StatelessWidget {
                 ),
               ),
             ],
-            if (transmission.returnedAt != null) ...[
-              const SizedBox(height: 12),
-              _InfoLine(
-                icon: Icons.assignment_turned_in_outlined,
-                label:
-                    'Rendu le ${_date(transmission.returnedAt!)}${transmission.returnedBy == null ? '' : ' par ${transmission.returnedBy}'}',
-              ),
-            ],
-            if (transmission.returnComment?.trim().isNotEmpty ?? false) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Commentaire au retour : ${transmission.returnComment!.trim()}',
-                style: const TextStyle(
-                  height: 1.4,
-                  color: Color(0xFF4C6E76),
+            if (!isDonation &&
+                (transmission.loanStatus == LoanStatus.rendu ||
+                    transmission.returnedAt != null)) ...[
+              const SizedBox(height: 14),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F9F5),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFD9E9DE)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Retour du matériel',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF286A45),
+                      ),
+                    ),
+                    if (transmission.returnedAt != null) ...[
+                      const SizedBox(height: 8),
+                      _InfoLine(
+                        icon: Icons.assignment_turned_in_outlined,
+                        label:
+                            'Rendu le ${_date(transmission.returnedAt!)}${transmission.returnedBy == null ? '' : ' par ${transmission.returnedBy}'}',
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Commentaire au retour',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF416C53),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      (transmission.returnComment?.trim().isNotEmpty ?? false)
+                          ? transmission.returnComment!.trim()
+                          : 'Aucun commentaire renseigné.',
+                      style: const TextStyle(
+                        height: 1.4,
+                        color: Color(0xFF345D48),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
