@@ -20,8 +20,10 @@ const PORT = Number(process.env.PORT || 3000);
 const SESSION_DAYS = Number(process.env.SESSION_DAYS || 180);
 const SECRET = process.env.VAULT_SECRET;
 
-// En production, la collecte n'est activée qu'après validation RGPD par la collectivité.
-const signaturesEnabled = NODE_ENV !== 'production' || process.env.ENABLE_SIGNATURES === 'true';
+// Captures/consultation disponibles en DEV et PROD (ENABLE_SIGNATURES=true dans Compose).
+// L'information des personnes, les habilitations et la conservation restent à cadrer avec le DPO.
+const signaturesEnabled = process.env.ENABLE_SIGNATURES !== 'false' &&
+    (NODE_ENV !== 'production' || process.env.ENABLE_SIGNATURES === 'true');
 const MAX_SIGNATURE_BYTES = 300_000;
 const PNG_MAGIC = Buffer.from('89504e470d0a1a0a', 'hex');
 
@@ -687,6 +689,15 @@ app.use((error, request, response, next) => {
 // ------------------------------------------------------------
 
 async function startServer() {
+    if (!fs.existsSync(vaultPath)) {
+        throw new Error(
+            'Vault utilisateurs introuvable : backend/vault/users.vault.enc. ' +
+            'Consultez docs/DEVELOPPEMENT.md ou docs/PRODUCTION.md ; ' +
+            'ne générez pas un nouveau vault par-dessus le vault existant.'
+        );
+    }
+    // Vérifier dès le démarrage que le VAULT_SECRET correspond à ce fichier.
+    readVault();
     await ensureDatabaseSchema();
     await checkDatabase();
     await query('DELETE FROM sessions WHERE expires_at <= NOW()');

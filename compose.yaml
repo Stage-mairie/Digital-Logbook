@@ -1,0 +1,87 @@
+name: digital-logbook-dev
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: ${DB_NAME:?Renseigner DB_NAME dans .env}
+      POSTGRES_USER: ${DB_USER:?Renseigner DB_USER dans .env}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Renseigner DB_PASSWORD dans .env}
+      PGDATA: /var/lib/postgresql/18/docker
+    volumes:
+      - db_data_dev:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 15s
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    env_file: .env
+    environment:
+      NODE_ENV: development
+      PORT: '3000'
+      DB_HOST: db
+      DB_PORT: '5432'
+      DB_NAME: ${DB_NAME:?}
+      DB_USER: ${DB_USER:?}
+      DB_PASSWORD: ${DB_PASSWORD:?}
+      DB_SSL: 'false'
+      ENABLE_SIGNATURES: 'true'
+    volumes:
+      - ./backend/src:/app/src:ro
+      - ./backend/sql:/app/sql:ro
+      - ./backend/vault:/app/vault:ro
+    command: ["node", "--watch", "src/server.js"]
+    ports:
+      # Exposition limitée au PC hôte ; adb reverse peut utiliser ce port.
+      - "127.0.0.1:${API_PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+      target: development
+    volumes:
+      - ./lib:/workspace/lib:ro
+      - ./assets:/workspace/assets:ro
+      - ./web:/workspace/web:ro
+      - ./pubspec.yaml:/workspace/pubspec.yaml:ro
+      - ./pubspec.lock:/workspace/pubspec.lock
+      - flutter_pub_cache:/root/.pub-cache
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    init: true
+
+  # À exécuter explicitement UNE SEULE FOIS si aucun vault n'existe.
+  # Ne jamais utiliser avec les comptes de démonstration en production.
+  vault-init:
+    profiles: ["setup"]
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    env_file: .env
+    volumes:
+      - ./backend/vault:/app/vault
+    command: ["node", "src/create-vault.js"]
+
+volumes:
+  db_data_dev:
+  flutter_pub_cache:

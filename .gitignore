@@ -1,4 +1,4 @@
-# Flutter/Dart
+# Flutter / Dart
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
@@ -6,10 +6,32 @@
 .pub-cache/
 build/
 coverage/
+.flutter_tool_state
 .idea/
 .vscode/
 *.iml
+android/local.properties
+
+# Cibles non utilisées : Android + Web uniquement
 ios/
 linux/
 macos/
 windows/
+
+# Secrets, artefacts locaux et sauvegardes
+.env
+.env.*
+!.env.example
+!.env.production.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+!backend/.env.development.example
+!backend/.env.production.example
+backend/vault/*.enc
+backend/data/*.json
+postgres-data/
+backups/
+*.dump
+*.log
+.DS_Store
