@@ -345,6 +345,7 @@ class _HistoriqueWebPageState extends State<HistoriqueWebPage> {
 
           return TransmissionCard(
             transmission: transmission,
+            signatureLoader: _service.getSignature,
             markingReturned: _returningIds.contains(transmission.id),
             onMarkReturned: transmission.isActiveLoan
                 ? () => _markReturned(transmission)

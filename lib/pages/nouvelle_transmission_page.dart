@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'widgets/signature_capture.dart';
+
 import '../models/transmission.dart';
 import '../services/auth_service.dart';
 import '../services/transmission_service.dart';
@@ -26,6 +28,8 @@ class _NouvelleTransmissionPageState extends State<NouvelleTransmissionPage> {
   final _quantityController = TextEditingController(text: '1');
   final _beneficiaryController = TextEditingController();
   final _contentController = TextEditingController();
+  final _signerController = TextEditingController();
+  final _signatureKey = GlobalKey<SignatureCaptureState>();
 
   late final TransmissionService _service;
 
@@ -68,6 +72,7 @@ class _NouvelleTransmissionPageState extends State<NouvelleTransmissionPage> {
     _quantityController.dispose();
     _beneficiaryController.dispose();
     _contentController.dispose();
+    _signerController.dispose();
     super.dispose();
   }
 
@@ -127,12 +132,26 @@ class _NouvelleTransmissionPageState extends State<NouvelleTransmissionPage> {
       return;
     }
 
+    final hasSignature = _signatureKey.currentState?.hasSignature ?? false;
+    if (hasSignature && _signerController.text.trim().length < 2) {
+      setState(() => _error = 'Indiquez le nom de la personne qui signe.');
+      return;
+    }
+    if (!hasSignature && _signerController.text.trim().isNotEmpty) {
+      setState(() => _error = 'Ajoutez la signature ou effacez le nom du signataire.');
+      return;
+    }
+
     setState(() {
       _saving = true;
       _error = null;
     });
 
     try {
+      final signaturePng = await _signatureKey.currentState?.exportPng();
+      if (hasSignature && signaturePng == null) {
+        throw const TransmissionException('Impossible de capturer la signature. Réessayez.');
+      }
       await _service.createTransmission(
         type: widget.type,
         equipmentType: _selectedEquipment!,
@@ -141,6 +160,8 @@ class _NouvelleTransmissionPageState extends State<NouvelleTransmissionPage> {
         quantity: int.parse(_quantityController.text),
         beneficiary: _beneficiaryController.text,
         content: _contentController.text,
+        signerName: signaturePng == null ? null : _signerController.text,
+        signaturePng: signaturePng,
       );
 
       if (!mounted) return;
@@ -398,6 +419,30 @@ class _NouvelleTransmissionPageState extends State<NouvelleTransmissionPage> {
               alignLabelWithHint: true,
               border: OutlineInputBorder(),
             ),
+          ),
+          const SizedBox(height: 12),
+          const Divider(),
+          const SizedBox(height: 10),
+          const Text('Accusé de remise du matériel',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 9),
+          TextFormField(
+            controller: _signerController,
+            maxLength: 120,
+            decoration: const InputDecoration(
+              labelText: 'Nom de la personne qui signe',
+              hintText: 'Prénom et nom du bénéficiaire',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          SignatureCapture(key: _signatureKey),
+          const SizedBox(height: 8),
+          const Text(
+            'En signant, la personne confirme la réception du matériel renseigné '
+            'dans ce formulaire. Une image PNG et le nom seront enregistrés '
+            'dans le cahier interne, sous réserve des règles de conservation '
+            'et d’accès validées par la collectivité.',
+            style: TextStyle(fontSize: 12, color: Color(0xFF62818A)),
           ),
           if (_error != null) ...[
             const SizedBox(height: 4),

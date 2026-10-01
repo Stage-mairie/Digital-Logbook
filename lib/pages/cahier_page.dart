@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
@@ -217,6 +218,7 @@ class _CahierPageState extends State<CahierPage> {
 
                       return TransmissionCard(
                         transmission: transmission,
+                        signatureLoader: _service.getSignature,
                         markingReturned:
                             _returningIds.contains(transmission.id),
                         onMarkReturned: transmission.isActiveLoan
@@ -239,12 +241,14 @@ class TransmissionCard extends StatelessWidget {
   final Transmission transmission;
   final VoidCallback? onMarkReturned;
   final bool markingReturned;
+  final Future<Uint8List> Function(String id)? signatureLoader;
 
   const TransmissionCard({
     super.key,
     required this.transmission,
     this.onMarkReturned,
     this.markingReturned = false,
+    this.signatureLoader,
   });
 
   String _date(DateTime date) {
@@ -305,93 +309,126 @@ class TransmissionCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
-            Wrap(
-              spacing: 18,
-              runSpacing: 10,
-              children: [
-                _InfoLine(
-                  icon: Icons.inventory_2_outlined,
-                  label: 'Quantité : ${transmission.quantity}',
-                ),
-                _InfoLine(
-                  icon: Icons.person_pin_outlined,
-                  label: transmission.beneficiary,
-                ),
-              ],
-            ),
-            if (transmission.content.trim().isNotEmpty) ...[
-              const SizedBox(height: 14),
-              Text(
-                isDonation ? 'Commentaire du don' : 'Commentaire du prêt',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF62818A),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                transmission.content,
-                style: const TextStyle(
-                  height: 1.45,
-                  color: Color(0xFF345D66),
-                ),
-              ),
-            ],
-            if (!isDonation &&
-                (transmission.loanStatus == LoanStatus.rendu ||
-                    transmission.returnedAt != null)) ...[
-              const SizedBox(height: 14),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF3F9F5),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFD9E9DE)),
-                ),
-                child: Column(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final signature = transmission.hasSignature && signatureLoader != null
+                    ? _SignaturePreview(
+                        key: ValueKey('signature-${transmission.id}'),
+                        id: transmission.id,
+                        signerName: transmission.signerName,
+                        signedAt: transmission.signedAt,
+                        loader: signatureLoader!,
+                      )
+                    : null;
+                final details = Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Retour du matériel',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF286A45),
-                      ),
-                    ),
-                    if (transmission.returnedAt != null) ...[
-                      const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 18,
+                    runSpacing: 10,
+                    children: [
                       _InfoLine(
-                        icon: Icons.assignment_turned_in_outlined,
-                        label:
-                            'Rendu le ${_date(transmission.returnedAt!)}${transmission.returnedBy == null ? '' : ' par ${transmission.returnedBy}'}',
+                        icon: Icons.inventory_2_outlined,
+                        label: 'Quantité : ${transmission.quantity}',
+                      ),
+                      _InfoLine(
+                        icon: Icons.person_pin_outlined,
+                        label: transmission.beneficiary,
                       ),
                     ],
-                    const SizedBox(height: 10),
-                    const Text(
-                      'Commentaire au retour',
-                      style: TextStyle(
+                  ),
+                  if (transmission.content.trim().isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Text(
+                      isDonation ? 'Commentaire du don' : 'Commentaire du prêt',
+                      style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF416C53),
+                        color: Color(0xFF62818A),
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      (transmission.returnComment?.trim().isNotEmpty ?? false)
-                          ? transmission.returnComment!.trim()
-                          : 'Aucun commentaire renseigné.',
+                      transmission.content,
                       style: const TextStyle(
-                        height: 1.4,
-                        color: Color(0xFF345D48),
+                        height: 1.45,
+                        color: Color(0xFF345D66),
                       ),
                     ),
                   ],
-                ),
-              ),
-            ],
+                  if (!isDonation &&
+                      (transmission.loanStatus == LoanStatus.rendu ||
+                          transmission.returnedAt != null)) ...[
+                    const SizedBox(height: 14),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3F9F5),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFD9E9DE)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Retour du matériel',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF286A45),
+                            ),
+                          ),
+                          if (transmission.returnedAt != null) ...[
+                            const SizedBox(height: 8),
+                            _InfoLine(
+                              icon: Icons.assignment_turned_in_outlined,
+                              label:
+                                  'Rendu le ${_date(transmission.returnedAt!)}${transmission.returnedBy == null ? '' : ' par ${transmission.returnedBy}'}',
+                            ),
+                          ],
+                          const SizedBox(height: 10),
+                          const Text(
+                            'Commentaire au retour',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF416C53),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            (transmission.returnComment?.trim().isNotEmpty ?? false)
+                                ? transmission.returnComment!.trim()
+                                : 'Aucun commentaire renseigné.',
+                            style: const TextStyle(
+                              height: 1.4,
+                              color: Color(0xFF345D48),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  ],
+                );
+                if (signature == null) return details;
+                if (constraints.maxWidth < 650) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [details, const SizedBox(height: 14), signature],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: details),
+                    const SizedBox(width: 18),
+                    SizedBox(width: 215, child: signature),
+                  ],
+                );
+              },
+            ),
             const SizedBox(height: 14),
             Row(
               children: [
@@ -435,6 +472,100 @@ class TransmissionCard extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SignaturePreview extends StatefulWidget {
+  final String id;
+  final String? signerName;
+  final DateTime? signedAt;
+  final Future<Uint8List> Function(String) loader;
+
+  const _SignaturePreview({
+    super.key,
+    required this.id,
+    required this.signerName,
+    required this.signedAt,
+    required this.loader,
+  });
+
+  @override
+  State<_SignaturePreview> createState() => _SignaturePreviewState();
+}
+
+class _SignaturePreviewState extends State<_SignaturePreview> {
+  late Future<Uint8List> _image;
+
+  @override
+  void initState() {
+    super.initState();
+    _image = widget.loader(widget.id);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SignaturePreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.id != widget.id) {
+      _image = widget.loader(widget.id);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final signedAt = widget.signedAt?.toLocal();
+    final date = signedAt == null
+        ? null
+        : '${signedAt.day.toString().padLeft(2, '0')}/'
+          '${signedAt.month.toString().padLeft(2, '0')}/${signedAt.year} '
+          '${signedAt.hour.toString().padLeft(2, '0')}:'
+          '${signedAt.minute.toString().padLeft(2, '0')}';
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7FBFC),
+        border: Border.all(color: const Color(0xFFDCEBED)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Signature à la remise',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 5),
+          Container(
+            color: Colors.white,
+            width: double.infinity,
+            height: 98,
+            child: FutureBuilder<Uint8List>(
+              future: _image,
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return const Center(child: Text('Signature indisponible',
+                      style: TextStyle(fontSize: 11)));
+                }
+                if (!snapshot.hasData) {
+                  return const Center(child: SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ));
+                }
+                return Image.memory(snapshot.data!, fit: BoxFit.contain,
+                    gaplessPlayback: true);
+              },
+            ),
+          ),
+          if (widget.signerName != null && widget.signerName!.isNotEmpty) ...[
+            const SizedBox(height: 5),
+            Text(widget.signerName!, style: const TextStyle(fontSize: 12,
+                fontWeight: FontWeight.w600)),
+          ],
+          if (date != null)
+            Text(date, style: const TextStyle(fontSize: 11,
+                color: Color(0xFF62818A))),
+        ],
       ),
     );
   }

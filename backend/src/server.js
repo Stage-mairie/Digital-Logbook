@@ -20,6 +20,11 @@ const PORT = Number(process.env.PORT || 3000);
 const SESSION_DAYS = Number(process.env.SESSION_DAYS || 180);
 const SECRET = process.env.VAULT_SECRET;
 
+// En production, la collecte n'est activée qu'après validation RGPD par la collectivité.
+const signaturesEnabled = NODE_ENV !== 'production' || process.env.ENABLE_SIGNATURES === 'true';
+const MAX_SIGNATURE_BYTES = 300_000;
+const PNG_MAGIC = Buffer.from('89504e470d0a1a0a', 'hex');
+
 const configuredCorsOrigins = String(
     process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || ''
 )
@@ -206,6 +211,9 @@ function rowToTransmission(row) {
         returnedBy: row.returned_by,
         returnedById: row.returned_by_id,
         returnComment: row.return_comment,
+        hasSignature: row.has_signature ?? Boolean(row.signature_png),
+        signerName: row.signer_name ?? null,
+        signedAt: row.signed_at ?? null,
         createdAt: row.created_at
     };
 }
@@ -410,7 +418,11 @@ app.get('/transmissions', requireSession, async (request, response) => {
 
     const result = await query(
         `
-        SELECT *
+        SELECT id, type, equipment_type, equipment_model, custom_equipment,
+               quantity, beneficiary, content, author, author_id, loan_status,
+               returned_at, returned_by, returned_by_id, return_comment,
+               created_at, signer_name, signed_at,
+               (signature_png IS NOT NULL) AS has_signature
         FROM transmissions
         ${where}
         ORDER BY created_at DESC
@@ -425,6 +437,27 @@ app.get('/transmissions', requireSession, async (request, response) => {
     });
 });
 
+// Image privée : jamais une URL publique ni une donnée incluse dans les listes/exports.
+app.get('/transmissions/:id/signature', requireSession, async (request, response) => {
+    if (!signaturesEnabled) {
+        return response.status(403).json({ error: 'Consultation des signatures désactivée.' });
+    }
+    const id = String(request.params.id || '');
+    if (!/^[0-9a-f-]{36}$/i.test(id)) {
+        return response.status(400).json({ error: 'Identifiant invalide.' });
+    }
+    const result = await query(
+        'SELECT signature_png FROM transmissions WHERE id = $1 AND signature_png IS NOT NULL',
+        [id]
+    );
+    if (result.rowCount === 0) {
+        return response.status(404).json({ error: 'Signature introuvable.' });
+    }
+    response.setHeader('Cache-Control', 'private, no-store, max-age=0');
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    response.type('png').send(result.rows[0].signature_png);
+});
+
 app.post('/transmissions', requireSession, async (request, response) => {
     const type = String(request.body?.type || '').trim().toLowerCase();
     const equipmentType = String(request.body?.equipmentType || '').trim();
@@ -433,6 +466,32 @@ app.post('/transmissions', requireSession, async (request, response) => {
     const beneficiary = String(request.body?.beneficiary || '').trim();
     const content = String(request.body?.content || '').trim();
     const quantity = Number(request.body?.quantity);
+    const signerName = String(request.body?.signerName ?? '').trim();
+    const signatureBase64 = request.body?.signaturePngBase64;
+    let signaturePng = null;
+
+    // Valider en entrée ; ne jamais collecter les trajectoires, pressions ou vitesses du stylet.
+    if (signatureBase64 != null && signatureBase64 !== '') {
+        if (!signaturesEnabled) {
+            return response.status(403).json({ error: 'Collecte des signatures non activée.' });
+        }
+        if (typeof signatureBase64 !== 'string' ||
+            signatureBase64.length > 405000 ||
+            !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(signatureBase64)) {
+            return response.status(400).json({ error: 'Format de signature invalide.' });
+        }
+        signaturePng = Buffer.from(signatureBase64, 'base64');
+        if (signaturePng.length < 65 ||
+            signaturePng.length > MAX_SIGNATURE_BYTES ||
+            !signaturePng.subarray(0, 8).equals(PNG_MAGIC)) {
+            return response.status(400).json({ error: 'La signature doit être une image PNG valide (300 Ko max).' });
+        }
+        if (signerName.length < 2 || signerName.length > 120) {
+            return response.status(400).json({ error: 'Nom du signataire requis (2 à 120 caractères).' });
+        }
+    } else if (signerName !== '') {
+        return response.status(400).json({ error: 'Ajoutez une signature ou effacez le nom du signataire.' });
+    }
 
     if (!['don', 'pret'].includes(type)) {
         return response.status(400).json({
@@ -526,10 +585,14 @@ app.post('/transmissions', requireSession, async (request, response) => {
             author,
             author_id,
             loan_status,
+            signer_name,
+            signature_png,
+            signed_at,
             created_at
         )
         VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW()
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+            $12, $13, CASE WHEN $13::bytea IS NOT NULL THEN NOW() END, NOW()
         )
         RETURNING *
         `,
@@ -544,7 +607,9 @@ app.post('/transmissions', requireSession, async (request, response) => {
             content,
             request.user.name || request.user.identifier,
             request.user.id,
-            loanStatus
+            loanStatus,
+            signaturePng == null ? null : signerName,
+            signaturePng
         ]
     );
 

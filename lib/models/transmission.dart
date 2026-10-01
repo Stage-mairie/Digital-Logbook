@@ -66,6 +66,9 @@ class Transmission {
   final DateTime? returnedAt;
   final String? returnedBy;
   final String? returnComment;
+  final bool hasSignature;
+  final String? signerName;
+  final DateTime? signedAt;
 
   const Transmission({
     required this.id,
@@ -82,6 +85,9 @@ class Transmission {
     required this.returnedAt,
     required this.returnedBy,
     this.returnComment,
+    this.hasSignature = false,
+    this.signerName,
+    this.signedAt,
   });
 
   String get equipmentLabel {
@@ -124,6 +130,9 @@ class Transmission {
       returnedAt: DateTime.tryParse(json['returnedAt'] as String? ?? ''),
       returnedBy: json['returnedBy'] as String?,
       returnComment: json['returnComment'] as String?,
+      hasSignature: json['hasSignature'] == true,
+      signerName: json['signerName'] as String?,
+      signedAt: DateTime.tryParse(json['signedAt'] as String? ?? ''),
     );
   }
 }

@@ -47,6 +47,12 @@ CREATE TABLE IF NOT EXISTS transmissions (
 -- Migration idempotente pour les bases déjà initialisées.
 ALTER TABLE transmissions ADD COLUMN IF NOT EXISTS return_comment TEXT;
 
+-- Signature d'accusé de remise : image PNG statique uniquement (aucune biométrie dynamique).
+-- Colonnes nullable pour conserver la compatibilité avec les opérations existantes.
+ALTER TABLE transmissions ADD COLUMN IF NOT EXISTS signature_png BYTEA;
+ALTER TABLE transmissions ADD COLUMN IF NOT EXISTS signer_name TEXT;
+ALTER TABLE transmissions ADD COLUMN IF NOT EXISTS signed_at TIMESTAMPTZ;
+
 CREATE INDEX IF NOT EXISTS transmissions_created_at_idx
     ON transmissions (created_at DESC);
 

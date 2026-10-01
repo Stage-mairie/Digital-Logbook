@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -105,6 +106,8 @@ class TransmissionService {
     required int quantity,
     required String beneficiary,
     String content = '',
+    String? signerName,
+    Uint8List? signaturePng,
   }) async {
     final response = await http.post(
       Uri.parse('${ApiConfig.baseUrl}/transmissions'),
@@ -117,6 +120,8 @@ class TransmissionService {
         'quantity': quantity,
         'beneficiary': beneficiary.trim(),
         'content': content.trim(),
+        if (signaturePng != null) 'signaturePngBase64': base64Encode(signaturePng),
+        if (signaturePng != null) 'signerName': signerName?.trim(),
       }),
     );
 
@@ -133,6 +138,22 @@ class TransmissionService {
 
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return Transmission.fromJson(body['item'] as Map<String, dynamic>);
+  }
+
+  // Consultation authentifiée, à la demande, jamais via une URL publique.
+  Future<Uint8List> getSignature(String id) async {
+    final response = await http.get(
+      Uri.parse('${ApiConfig.baseUrl}/transmissions/$id/signature'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 401) {
+      throw const TransmissionException('Session expirée. Reconnectez-vous.');
+    }
+    if (response.statusCode != 200) {
+      throw TransmissionException(_readError(response,
+          fallback: 'Signature indisponible (${response.statusCode}).'));
+    }
+    return response.bodyBytes;
   }
 
   Future<Transmission> markLoanReturned(
