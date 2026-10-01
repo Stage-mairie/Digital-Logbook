@@ -205,6 +205,7 @@ function rowToTransmission(row) {
         returnedAt: row.returned_at,
         returnedBy: row.returned_by,
         returnedById: row.returned_by_id,
+        returnComment: row.return_comment,
         createdAt: row.created_at
     };
 }
@@ -397,7 +398,8 @@ app.get('/transmissions', requireSession, async (request, response) => {
                 beneficiary,
                 content,
                 author,
-                COALESCE(loan_status, '')
+                COALESCE(loan_status, ''),
+                COALESCE(return_comment, '')
             ) ILIKE $${params.length}
         `);
     }
@@ -554,6 +556,16 @@ app.post('/transmissions', requireSession, async (request, response) => {
 
 app.patch('/transmissions/:id/return', requireSession, async (request, response) => {
     const id = String(request.params.id || '').trim();
+    const rawReturnComment = request.body?.returnComment;
+
+    if (rawReturnComment != null && typeof rawReturnComment !== 'string') {
+        return response.status(400).json({ error: 'Le commentaire de retour doit être du texte.' });
+    }
+
+    const returnComment = String(rawReturnComment ?? '').trim();
+    if (returnComment.length > 1000) {
+        return response.status(400).json({ error: 'Le commentaire de retour est limité à 1000 caractères.' });
+    }
 
     const result = await query(
         `
@@ -562,7 +574,8 @@ app.patch('/transmissions/:id/return', requireSession, async (request, response)
             loan_status = 'rendu',
             returned_at = NOW(),
             returned_by = $2,
-            returned_by_id = $3
+            returned_by_id = $3,
+            return_comment = NULLIF($4, '')
         WHERE id = $1
           AND type = 'pret'
           AND (loan_status = 'en_cours' OR loan_status IS NULL)
@@ -571,7 +584,8 @@ app.patch('/transmissions/:id/return', requireSession, async (request, response)
         [
             id,
             request.user.name || request.user.identifier,
-            request.user.id
+            request.user.id,
+            returnComment
         ]
     );
 

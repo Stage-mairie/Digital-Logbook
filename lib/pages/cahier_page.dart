@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../models/transmission.dart';
 import '../services/auth_service.dart';
 import '../services/transmission_service.dart';
+import 'widgets/return_loan_dialog.dart';
 
 class CahierPage extends StatefulWidget {
   final AuthService auth;
@@ -69,34 +70,21 @@ class _CahierPageState extends State<CahierPage> {
   }
 
   Future<void> _markReturned(Transmission transmission) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirmer le retour'),
-        content: Text(
-          'Marquer le prêt « ${transmission.equipmentLabel} » comme rendu ?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Annuler'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Marquer comme rendu'),
-          ),
-        ],
-      ),
+    final returnComment = await showReturnLoanDialog(
+      context,
+      transmission.equipmentLabel,
     );
-
-    if (confirmed != true || !mounted) return;
+    if (returnComment == null || !mounted) return;
 
     setState(() {
       _returningIds.add(transmission.id);
     });
 
     try {
-      await _service.markLoanReturned(transmission.id);
+      await _service.markLoanReturned(
+        transmission.id,
+        returnComment: returnComment,
+      );
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -347,6 +335,16 @@ class TransmissionCard extends StatelessWidget {
                 icon: Icons.assignment_turned_in_outlined,
                 label:
                     'Rendu le ${_date(transmission.returnedAt!)}${transmission.returnedBy == null ? '' : ' par ${transmission.returnedBy}'}',
+              ),
+            ],
+            if (transmission.returnComment?.trim().isNotEmpty ?? false) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Commentaire au retour : ${transmission.returnComment!.trim()}',
+                style: const TextStyle(
+                  height: 1.4,
+                  color: Color(0xFF4C6E76),
+                ),
               ),
             ],
             const SizedBox(height: 14),

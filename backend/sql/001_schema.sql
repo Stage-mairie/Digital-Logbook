@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS transmissions (
     returned_at TIMESTAMPTZ,
     returned_by TEXT,
     returned_by_id TEXT,
+    return_comment TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT transmissions_loan_status_check CHECK (
         (type = 'don' AND loan_status IS NULL)
@@ -42,6 +43,9 @@ CREATE TABLE IF NOT EXISTS transmissions (
         (type = 'pret' AND loan_status IN ('en_cours', 'rendu'))
     )
 );
+
+-- Migration idempotente pour les bases déjà initialisées.
+ALTER TABLE transmissions ADD COLUMN IF NOT EXISTS return_comment TEXT;
 
 CREATE INDEX IF NOT EXISTS transmissions_created_at_idx
     ON transmissions (created_at DESC);
@@ -69,6 +73,7 @@ VALUES
     ('don', 'Souris', '', 20),
     ('don', 'Clavier', '', 30),
     ('don', 'Ordinateur', '', 40),
+    ('don', 'Casque audio TT', '', 50),
     ('don', 'Autre', '', 90)
 ON CONFLICT (transaction_type, category, model) DO NOTHING;
 
@@ -88,5 +93,6 @@ VALUES
     ('pret', 'Airbox', '', 60),
     ('pret', 'Flybox', '', 70),
     ('pret', 'Enrouleur', '', 80),
+    ('pret', 'Téléphone', '', 85),
     ('pret', 'Autre', '', 90)
 ON CONFLICT (transaction_type, category, model) DO NOTHING;

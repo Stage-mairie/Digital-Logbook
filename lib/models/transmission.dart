@@ -65,6 +65,7 @@ class Transmission {
   final LoanStatus? loanStatus;
   final DateTime? returnedAt;
   final String? returnedBy;
+  final String? returnComment;
 
   const Transmission({
     required this.id,
@@ -80,6 +81,7 @@ class Transmission {
     required this.loanStatus,
     required this.returnedAt,
     required this.returnedBy,
+    this.returnComment,
   });
 
   String get equipmentLabel {
@@ -121,6 +123,7 @@ class Transmission {
       loanStatus: LoanStatusLabel.fromApi(json['loanStatus'] as String?),
       returnedAt: DateTime.tryParse(json['returnedAt'] as String? ?? ''),
       returnedBy: json['returnedBy'] as String?,
+      returnComment: json['returnComment'] as String?,
     );
   }
 }

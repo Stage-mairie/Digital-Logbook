@@ -135,10 +135,14 @@ class TransmissionService {
     return Transmission.fromJson(body['item'] as Map<String, dynamic>);
   }
 
-  Future<Transmission> markLoanReturned(String id) async {
+  Future<Transmission> markLoanReturned(
+    String id, {
+    String returnComment = '',
+  }) async {
     final response = await http.patch(
       Uri.parse('${ApiConfig.baseUrl}/transmissions/$id/return'),
       headers: await _headers(),
+      body: jsonEncode({'returnComment': returnComment.trim()}),
     );
 
     if (response.statusCode == 401) {
