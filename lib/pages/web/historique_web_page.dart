@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/transmission.dart';
 import '../../services/auth_service.dart';
+import '../../services/history_export.dart';
 import '../../services/transmission_service.dart';
 import '../cahier_page.dart';
 import '../login_page.dart';
@@ -29,6 +30,7 @@ class _HistoriqueWebPageState extends State<HistoriqueWebPage> {
   Timer? _debounce;
   bool _loading = true;
   String? _error;
+  String _appliedQuery = '';
   List<Transmission> _items = const [];
 
   @override
@@ -57,6 +59,7 @@ class _HistoriqueWebPageState extends State<HistoriqueWebPage> {
 
       setState(() {
         _items = items;
+        _appliedQuery = query?.trim() ?? '';
       });
     } catch (e) {
       if (!mounted) return;
@@ -73,10 +76,82 @@ class _HistoriqueWebPageState extends State<HistoriqueWebPage> {
   }
 
   void _onSearchChanged(String value) {
+    setState(() {}); // Désactive Exporter pendant la temporisation de recherche.
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 350), () {
       _load(query: value.trim());
     });
+  }
+
+  bool get _canExport =>
+      !_loading &&
+      _error == null &&
+      _items.isNotEmpty &&
+      _appliedQuery == _searchController.text.trim();
+
+  void _export(HistoryExportFormat format) {
+    if (!_canExport) return;
+    try {
+      HistoryExport.export(_items, format);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Export impossible : $error')),
+      );
+    }
+  }
+
+  Widget _exportMenu() {
+    return PopupMenuButton<HistoryExportFormat>(
+      tooltip: 'Exporter les résultats affichés',
+      enabled: _canExport,
+      onSelected: _export,
+      itemBuilder: (context) => const [
+        PopupMenuItem(
+          value: HistoryExportFormat.csv,
+          child: Text('CSV (.csv)'),
+        ),
+        PopupMenuItem(
+          value: HistoryExportFormat.json,
+          child: Text('JSON (.json)'),
+        ),
+        PopupMenuItem(
+          value: HistoryExportFormat.xlsx,
+          child: Text('Excel (.xlsx)'),
+        ),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          color: _canExport ? Colors.white : const Color(0xFFF4F7F7),
+          border: Border.all(color: const Color(0xFFDCEBED)),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.file_download_outlined,
+                size: 20,
+                color: _canExport
+                    ? const Color(0xFF214B55)
+                    : const Color(0xFF9DAFB3)),
+            const SizedBox(width: 8),
+            Text(
+              'Exporter',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: _canExport
+                    ? const Color(0xFF214B55)
+                    : const Color(0xFF9DAFB3),
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.arrow_drop_down, size: 18),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _markReturned(Transmission transmission) async {
@@ -192,6 +267,11 @@ class _HistoriqueWebPageState extends State<HistoriqueWebPage> {
                                 const _HistoryTitle(),
                                 const SizedBox(height: 18),
                                 search,
+                                const SizedBox(height: 12),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: _exportMenu(),
+                                ),
                               ],
                             );
                           }
@@ -199,8 +279,10 @@ class _HistoriqueWebPageState extends State<HistoriqueWebPage> {
                           return Row(
                             children: [
                               const Expanded(child: _HistoryTitle()),
-                              const SizedBox(width: 28),
+                              const SizedBox(width: 20),
                               search,
+                              const SizedBox(width: 12),
+                              _exportMenu(),
                             ],
                           );
                         },
