@@ -155,20 +155,18 @@ class _LoginPageState extends State<LoginPage> {
                     children: [
                       Image.asset(
                         'assets/images/logo_saint_andre.png',
-                        width: kIsWeb ? 340 : 420,
-                        height: kIsWeb ? 220 : 320,
+                        width: kIsWeb ? 230 : 215,
+                        height: kIsWeb ? 116 : 108,
                         fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) {
-                          return const Icon(
-                            Icons.account_balance,
-                            size: 60,
-                            color: primary,
-                          );
-                        },
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.account_balance,
+                          size: 56,
+                          color: primary,
+                        ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16),
                       const Text(
-                        'Cahier de transmission',
+                        'Cahier de Transmission',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 30,
@@ -184,7 +182,7 @@ class _LoginPageState extends State<LoginPage> {
                           color: Color(0xFF62818A),
                         ),
                       ),
-                      const SizedBox(height: 30),
+                      const SizedBox(height: 26),
                       Container(
                         padding: const EdgeInsets.all(30),
                         decoration: BoxDecoration(

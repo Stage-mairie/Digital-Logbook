@@ -27,30 +27,13 @@ class HomePage extends StatelessWidget {
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: false,
-        title: Row(
-          children: [
-            Image.asset(
-              'assets/images/logo_saint_andre.png',
-              height: 48,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) {
-                return const Icon(
-                  Icons.account_balance,
-                  color: primary,
-                  size: 32,
-                );
-              },
-            ),
-            const SizedBox(width: 14),
-            const Text(
-              'Cahier de transmission',
-              style: TextStyle(
-                color: Color(0xFF214B55),
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
+        title: const Text(
+          'Cahier de Transmission',
+          style: TextStyle(
+            color: Color(0xFF214B55),
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
       body: SafeArea(

@@ -378,19 +378,15 @@ class _WebHeader extends StatelessWidget {
           child: Row(
             children: [
               Image.asset(
-                'assets/images/logo_saint_andre.png',
-                height: 58,
+                'assets/images/app_icon_ct.png',
+                width: 52,
+                height: 52,
                 fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => const Icon(
-                  Icons.account_balance,
-                  size: 34,
-                  color: Color(0xFF2D9595),
-                ),
               ),
               const SizedBox(width: 18),
               const Expanded(
                 child: Text(
-                  'Cahier de transmission',
+                  'Cahier de Transmission',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,

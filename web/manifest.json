@@ -1,11 +1,11 @@
 {
-    "name": "transmission_numerique",
-    "short_name": "transmission_numerique",
+    "name": "Cahier de Transmission",
+    "short_name": "Cahier",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#F5FBFC",
+    "theme_color": "#053B77",
+    "description": "Suivi des dons, prêts et retours de matériel.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

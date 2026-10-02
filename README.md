@@ -1,4 +1,4 @@
-# Digital-Logbook
+# Cahier de Transmission
 
 Application de gestion des **dons et prêts de matériel** : Flutter Android (tablette) + Flutter Web (consultation) + API Node/Express + PostgreSQL.
 
@@ -50,5 +50,6 @@ Le Web de production est servi par Nginx sur `127.0.0.1:8080` pour être placé 
 | Signature, informations et RGPD | [docs/SIGNATURES_RGPD.md](docs/SIGNATURES_RGPD.md) |
 | Export Web CSV/JSON/Excel | [docs/EXPORT_HISTORIQUE.md](docs/EXPORT_HISTORIQUE.md) |
 | Historique et commentaires | [docs/COMMENTAIRES_CAHIER.md](docs/COMMENTAIRES_CAHIER.md) |
+| Nom, logo et icônes Android/Web | [docs/IDENTITE_VISUELLE.md](docs/IDENTITE_VISUELLE.md) |
 
 Ne commitez **jamais** `.env`, `.env.production`, `backend/vault/*.enc`, des sauvegardes ou des signatures réelles. Les comptes générés par `vault-init` sont des **comptes de démonstration**, interdits en production.

@@ -13,7 +13,7 @@ class CahierTransmissionApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Cahier de transmission',
+      title: 'Cahier de Transmission',
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
