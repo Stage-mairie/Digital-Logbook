@@ -36,7 +36,7 @@ services:
       ENABLE_SIGNATURES: 'true'
       CORS_ORIGINS: http://cahier_transmission.saint-andre.re
     volumes:
-      - ./backend/vault:/app/vault:ro
+      - vault_data:/app/vault:ro
     depends_on:
       db:
         condition: service_healthy
@@ -86,3 +86,4 @@ networks:
 
 volumes:
   db_data_prod:
+  vault_data:

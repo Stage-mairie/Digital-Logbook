@@ -27,20 +27,23 @@ if (!stdin.isTTY || !stdout.isTTY) {
 
 // Désactive l'écho du terminal pendant la saisie des mots de passe.
 const rl = readline.createInterface({ input: stdin, output: stdout, terminal: true });
+
 async function hiddenPrompt(label) {
-    stdout.write(label);
     const originalWrite = rl._writeToOutput;
+
     rl._writeToOutput = function (value) {
         if (value.includes('\n') || value.includes('\r')) {
             originalWrite.call(this, value);
         }
     };
+
     try {
-        return await rl.question('');
+        return await rl.question(label);
     } finally {
         rl._writeToOutput = originalWrite;
     }
 }
+
 
 async function passwordFor(account) {
     const password = await hiddenPrompt(`Mot de passe ${account} : `);

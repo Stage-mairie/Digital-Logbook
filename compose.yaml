@@ -35,7 +35,7 @@ services:
     volumes:
       - ./backend/src:/app/src:ro
       - ./backend/sql:/app/sql:ro
-      - ./backend/vault:/app/vault:ro
+      - vault_data:/app/vault:ro
     command: ["node", "--watch", "src/server.js"]
     ports:
       # Exposition limitée au PC hôte ; adb reverse peut utiliser ce port.
