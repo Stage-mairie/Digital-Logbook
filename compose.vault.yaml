@@ -1,0 +1,16 @@
+# Ajouter en surcouche pour une opération manuelle UNIQUEMENT.
+services:
+  vault-setup:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    profiles: ["setup"]
+    user: "0:0"
+    entrypoint: ["node", "src/create-vault.js"]
+    environment:
+      VAULT_SECRET: ${VAULT_SECRET:?VAULT_SECRET requis}
+    volumes:
+      - ./backend/vault:/app/vault
+    network_mode: none
+    stdin_open: true
+    tty: true
