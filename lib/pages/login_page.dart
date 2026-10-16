@@ -28,6 +28,38 @@ class _LoginPageState extends State<LoginPage> {
   static const Color primary = Color(0xFF2D9595);
   static const Color green = Color(0xFF88D8C0);
 
+  @override
+  void initState() {
+    super.initState();
+    _restoreSession();
+  }
+
+  Future<void> _restoreSession() async {
+    setState(() => _loading = true);
+    try {
+      final restored = await widget.auth.restoreSession();
+      if (!mounted) return;
+      if (restored) {
+        _openHome();
+      }
+    } catch (_) {
+      // Le formulaire reste disponible si la restauration échoue.
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _openHome() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => kIsWeb
+            ? HistoriqueWebPage(auth: widget.auth)
+            : HomePage(auth: widget.auth),
+      ),
+    );
+  }
+
   Future<void> _login() async {
     FocusScope.of(context).unfocus();
 
@@ -53,14 +85,7 @@ class _LoginPageState extends State<LoginPage> {
       if (!mounted) return;
 
       if (success) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => kIsWeb
-                ? HistoriqueWebPage(auth: widget.auth)
-                : HomePage(auth: widget.auth),
-          ),
-        );
+        _openHome();
       } else {
         setState(() {
           _errorMessage = 'Identifiant ou mot de passe incorrect.';
