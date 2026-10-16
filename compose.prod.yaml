@@ -4,9 +4,9 @@ services:
     image: postgres:18
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${DB_NAME:?Renseigner DB_NAME}
-      POSTGRES_USER: ${DB_USER:?Renseigner DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?Renseigner DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       PGDATA: /var/lib/postgresql/18/docker
     volumes:
       - db_data_prod:/var/lib/postgresql
@@ -34,7 +34,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?}
       DB_SSL: 'false'
       ENABLE_SIGNATURES: 'true'
-      CORS_ORIGINS: https://${APP_DOMAIN:?Renseigner APP_DOMAIN}
+      CORS_ORIGINS: http://cahier_transmission.saint-andre.re
     volumes:
       - ./backend/vault:/app/vault:ro
     depends_on:
@@ -66,7 +66,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik"
-      - "traefik.http.routers.logbook.rule=Host(`${APP_DOMAIN:?Renseigner APP_DOMAIN}`)"
+      - "traefik.http.routers.logbook.rule=Host(`cahier_transmission.saint-andre.re`)"
       - "traefik.http.routers.logbook.entrypoints=web"
       - "traefik.http.routers.logbook.tls=true"
       - "traefik.http.services.logbook.loadbalancer.server.port=80"
