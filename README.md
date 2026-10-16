@@ -44,6 +44,7 @@ Le Web de production est servi par Nginx sur `127.0.0.1:8080` pour être placé 
 |---|---|
 | Installation, commandes Docker et tablette Lenovo | [docs/DEVELOPPEMENT.md](docs/DEVELOPPEMENT.md) |
 | Déploiement et HTTPS | [docs/PRODUCTION.md](docs/PRODUCTION.md) |
+| Comptes partagés et Traefik | [docs/DEPLOIEMENT_TRAEFIK.md](docs/DEPLOIEMENT_TRAEFIK.md) |
 | Diagramme d'architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | Sauvegarde et migration de l'ancienne DB | [docs/BASE_DE_DONNEES.md](docs/BASE_DE_DONNEES.md) |
 | Fonctionnalités dons/prêts, retours et catalogue | [docs/MATERIEL_ET_RETOURS.md](docs/MATERIEL_ET_RETOURS.md) |
