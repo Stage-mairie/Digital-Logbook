@@ -84,4 +84,5 @@ services:
 
 volumes:
   db_data_dev:
+  vault_data:
   flutter_pub_cache:

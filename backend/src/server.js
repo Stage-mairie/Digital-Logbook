@@ -17,7 +17,15 @@ dotenv.config();
 const app = express();
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const PORT = Number(process.env.PORT || 3000);
-const SESSION_DAYS = Number(process.env.SESSION_DAYS || 180);
+// La valeur clientType est une indication et NON une preuve de type d'appareil.
+// Une authentification forte des terminaux est necessaire pour garantir
+// qu'un client non approuve ne demande jamais la duree Android.
+const WEB_SESSION_HOURS = Number(process.env.WEB_SESSION_HOURS || 8);
+const ANDROID_SESSION_DAYS = Number(process.env.ANDROID_SESSION_DAYS || process.env.SESSION_DAYS || 180);
+if (!Number.isInteger(WEB_SESSION_HOURS) || WEB_SESSION_HOURS < 1 || WEB_SESSION_HOURS > 24 ||
+    !Number.isInteger(ANDROID_SESSION_DAYS) || ANDROID_SESSION_DAYS < 1 || ANDROID_SESSION_DAYS > 180) {
+    throw new Error('Durees de session invalides.');
+}
 const SECRET = process.env.VAULT_SECRET;
 
 // Captures/consultation disponibles en DEV et PROD (ENABLE_SIGNATURES=true dans Compose).
@@ -247,7 +255,7 @@ app.get('/health', async (_, response) => {
 // ------------------------------------------------------------
 
 app.post('/auth/login', async (request, response) => {
-    const { identifier, password } = request.body || {};
+    const { identifier, password, clientType } = request.body || {};
 
     if (!identifier || !password) {
         return response.status(400).json({
@@ -273,6 +281,9 @@ app.post('/auth/login', async (request, response) => {
     }
 
     const token = generateToken();
+    const durationHours = clientType === 'android'
+        ? ANDROID_SESSION_DAYS * 24
+        : WEB_SESSION_HOURS;
 
     await query(
         `
@@ -281,10 +292,10 @@ app.post('/auth/login', async (request, response) => {
             $1,
             $2,
             NOW(),
-            NOW() + ($3::integer * INTERVAL '1 day')
+            NOW() + ($3::integer * INTERVAL '1 hour')
         )
         `,
-        [hashToken(token), user.id, SESSION_DAYS]
+        [hashToken(token), user.id, durationHours]
     );
 
     response.json({
@@ -295,7 +306,7 @@ app.post('/auth/login', async (request, response) => {
             name: user.name
         },
         refreshToken: token,
-        expiresInDays: SESSION_DAYS
+        expiresInHours: durationHours
     });
 });
 
