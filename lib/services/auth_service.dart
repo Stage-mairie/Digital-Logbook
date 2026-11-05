@@ -1,16 +1,15 @@
 import 'dart:convert';
 
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
+import 'session_token_storage.dart';
 
 class AuthService {
   static String get baseUrl => ApiConfig.baseUrl;
 
-  static const FlutterSecureStorage storage = FlutterSecureStorage();
-
-  static const String refreshTokenKey = 'digital_logbook_refresh_token';
+  static final SessionTokenStorage storage = SessionTokenStorage();
 
   Future<bool> login(String identifier, String password) async {
     final response = await http.post(
@@ -21,6 +20,7 @@ class AuthService {
       body: jsonEncode({
         'identifier': identifier,
         'password': password,
+        'clientType': kIsWeb ? 'web' : 'android',
       }),
     );
 
@@ -35,16 +35,13 @@ class AuthService {
       return false;
     }
 
-    await storage.write(
-      key: refreshTokenKey,
-      value: token,
-    );
+    await storage.write(token);
 
     return true;
   }
 
   Future<String?> getSessionToken() {
-    return storage.read(key: refreshTokenKey);
+    return storage.read();
   }
 
   Future<bool> restoreSession() async {
@@ -93,6 +90,6 @@ class AuthService {
       } catch (_) {}
     }
 
-    await storage.delete(key: refreshTokenKey);
+    await storage.delete();
   }
 }

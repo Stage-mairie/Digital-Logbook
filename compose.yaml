@@ -86,4 +86,5 @@ volumes:
   postgres_data:
   vault_data:
   db_data_dev:
+  vault_data:
   flutter_pub_cache:
