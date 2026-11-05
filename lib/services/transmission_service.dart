@@ -55,6 +55,33 @@ class TransmissionService {
         .toList();
   }
 
+  Future<List<String>> getPersonSuggestions({
+    required String kind,
+    required String query,
+  }) async {
+    final value = query.trim();
+    if (value.length < 2) return [];
+
+    final uri = Uri.parse(ApiConfig.baseUrl + '/person-suggestions').replace(
+      queryParameters: {'kind': kind, 'q': value},
+    );
+    final response = await http.get(uri, headers: await _headers());
+
+    if (response.statusCode == 401) {
+      throw const TransmissionException('Session expir├®e. Reconnectez-vous.');
+    }
+    if (response.statusCode != 200) {
+      throw TransmissionException(_readError(
+        response,
+        fallback: 'Impossible de rechercher les noms.',
+      ));
+    }
+
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final items = body['items'] as List<dynamic>? ?? const [];
+    return items.whereType<String>().toList();
+  }
+
   Future<List<Transmission>> getTransmissions({
     int? days,
     String? query,
@@ -120,7 +147,8 @@ class TransmissionService {
         'quantity': quantity,
         'beneficiary': beneficiary.trim(),
         'content': content.trim(),
-        if (signaturePng != null) 'signaturePngBase64': base64Encode(signaturePng),
+        if (signaturePng != null)
+          'signaturePngBase64': base64Encode(signaturePng),
         if (signaturePng != null) 'signerName': signerName?.trim(),
       }),
     );

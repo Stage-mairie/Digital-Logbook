@@ -374,6 +374,37 @@ app.get('/equipment-catalog', requireSession, async (request, response) => {
 });
 
 // ------------------------------------------------------------
+// SUGGESTIONS DE NOMS
+// ------------------------------------------------------------
+
+app.get('/person-suggestions', requireSession, async (request, response) => {
+    const kind = String(request.query.kind || '').trim();
+    const search = String(request.query.q || '').replace(/\s+/g, ' ').trim();
+
+    if (!['beneficiary', 'signer'].includes(kind)) {
+        return response.status(400).json({ error: 'Type de suggestion invalide.' });
+    }
+
+    if (search.length < 2) {
+        return response.json({ ok: true, items: [] });
+    }
+
+    if (search.length > 120) {
+        return response.status(400).json({ error: 'Recherche trop longue.' });
+    }
+
+    const result = await query(
+        'SELECT name FROM person_suggestions ' +
+        'WHERE kind = $1 AND POSITION(lower($2) IN normalized_name) > 0 ' +
+        'ORDER BY last_used_at DESC, name ASC LIMIT 10',
+        [kind, search]
+    );
+
+    response.setHeader('Cache-Control', 'private, no-store');
+    response.json({ ok: true, items: result.rows.map((row) => row.name) });
+});
+
+// ------------------------------------------------------------
 // TRANSMISSIONS
 // ------------------------------------------------------------
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'widgets/person_suggestion_field.dart';
 import 'widgets/signature_capture.dart';
 
 import '../models/transmission.dart';
@@ -138,7 +139,8 @@ class _NouvelleTransmissionPageState extends State<NouvelleTransmissionPage> {
       return;
     }
     if (!hasSignature && _signerController.text.trim().isNotEmpty) {
-      setState(() => _error = 'Ajoutez la signature ou effacez le nom du signataire.');
+      setState(() =>
+          _error = 'Ajoutez la signature ou effacez le nom du signataire.');
       return;
     }
 
@@ -150,7 +152,8 @@ class _NouvelleTransmissionPageState extends State<NouvelleTransmissionPage> {
     try {
       final signaturePng = await _signatureKey.currentState?.exportPng();
       if (hasSignature && signaturePng == null) {
-        throw const TransmissionException('Impossible de capturer la signature. Réessayez.');
+        throw const TransmissionException(
+            'Impossible de capturer la signature. Réessayez.');
       }
       await _service.createTransmission(
         type: widget.type,
@@ -392,20 +395,14 @@ class _NouvelleTransmissionPageState extends State<NouvelleTransmissionPage> {
             },
           ),
           const SizedBox(height: 16),
-          TextFormField(
+          PersonSuggestionField(
             controller: _beneficiaryController,
-            maxLength: 120,
-            decoration: const InputDecoration(
-              labelText: 'Bénéficiaire / service',
-              hintText: 'Ex. Service RH, Mme Payet…',
-              border: OutlineInputBorder(),
-            ),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Indiquez le bénéficiaire ou le service.';
-              }
-              return null;
-            },
+            service: _service,
+            kind: 'beneficiary',
+            label: 'Bénéficiaire / service',
+            hint: 'Ex. Service RH, Mme Payet…',
+            requiredField: true,
+            enabled: !_saving,
           ),
           const SizedBox(height: 4),
           TextFormField(
@@ -426,14 +423,13 @@ class _NouvelleTransmissionPageState extends State<NouvelleTransmissionPage> {
           const Text('Accusé de remise du matériel',
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 9),
-          TextFormField(
+          PersonSuggestionField(
             controller: _signerController,
-            maxLength: 120,
-            decoration: const InputDecoration(
-              labelText: 'Nom de la personne qui signe',
-              hintText: 'Prénom et nom du bénéficiaire',
-              border: OutlineInputBorder(),
-            ),
+            service: _service,
+            kind: 'signer',
+            label: 'Nom de la personne qui signe',
+            hint: 'Prénom et nom du bénéficiaire',
+            enabled: !_saving,
           ),
           SignatureCapture(key: _signatureKey),
           const SizedBox(height: 8),

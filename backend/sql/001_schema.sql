@@ -70,6 +70,63 @@ SET loan_status = 'en_cours'
 WHERE type = 'pret'
   AND loan_status IS NULL;
 
+-- Suggestions partagees entre le Web et les tablettes.
+CREATE TABLE IF NOT EXISTS person_suggestions (
+    id BIGSERIAL PRIMARY KEY,
+    kind TEXT NOT NULL CHECK (kind IN ('beneficiary', 'signer')),
+    name TEXT NOT NULL CHECK (char_length(name) BETWEEN 2 AND 120),
+    normalized_name TEXT GENERATED ALWAYS AS (
+        lower(regexp_replace(btrim(name), '\s+', ' ', 'g'))
+    ) STORED,
+    last_used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (kind, normalized_name)
+);
+
+CREATE INDEX IF NOT EXISTS person_suggestions_recent_idx
+    ON person_suggestions (kind, last_used_at DESC);
+
+-- Memorise les noms dans la transaction de creation.
+CREATE OR REPLACE FUNCTION remember_transmission_people()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF char_length(btrim(NEW.beneficiary)) BETWEEN 2 AND 120 THEN
+        INSERT INTO person_suggestions (kind, name)
+        VALUES ('beneficiary', regexp_replace(btrim(NEW.beneficiary), '\s+', ' ', 'g'))
+        ON CONFLICT (kind, normalized_name)
+        DO UPDATE SET last_used_at = NOW();
+    END IF;
+
+    IF NEW.signature_png IS NOT NULL AND NEW.signer_name IS NOT NULL
+       AND char_length(btrim(NEW.signer_name)) BETWEEN 2 AND 120 THEN
+        INSERT INTO person_suggestions (kind, name)
+        VALUES ('signer', regexp_replace(btrim(NEW.signer_name), '\s+', ' ', 'g'))
+        ON CONFLICT (kind, normalized_name)
+        DO UPDATE SET last_used_at = NOW();
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE TRIGGER transmissions_remember_people
+AFTER INSERT ON transmissions
+FOR EACH ROW EXECUTE FUNCTION remember_transmission_people();
+
+-- Recuperation des noms des transmissions existantes.
+INSERT INTO person_suggestions (kind, name)
+SELECT 'beneficiary', regexp_replace(btrim(beneficiary), '\s+', ' ', 'g')
+FROM transmissions
+WHERE char_length(btrim(beneficiary)) BETWEEN 2 AND 120
+ON CONFLICT (kind, normalized_name) DO NOTHING;
+
+INSERT INTO person_suggestions (kind, name)
+SELECT 'signer', regexp_replace(btrim(signer_name), '\s+', ' ', 'g')
+FROM transmissions
+WHERE signature_png IS NOT NULL
+  AND signer_name IS NOT NULL
+  AND char_length(btrim(signer_name)) BETWEEN 2 AND 120
+ON CONFLICT (kind, normalized_name) DO NOTHING;
+
 -- Catalogue des dons
 INSERT INTO equipment_catalog (transaction_type, category, model, sort_order)
 VALUES

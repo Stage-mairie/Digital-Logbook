@@ -83,5 +83,7 @@ services:
     command: ["node", "src/create-vault.js"]
 
 volumes:
+  postgres_data:
+  vault_data:
   db_data_dev:
   flutter_pub_cache:
