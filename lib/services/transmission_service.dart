@@ -131,6 +131,7 @@ class TransmissionService {
     String? equipmentModel,
     String? customEquipment,
     required int quantity,
+    List<TransmissionItem>? equipmentItems,
     required String beneficiary,
     String content = '',
     String? signerName,
@@ -145,6 +146,8 @@ class TransmissionService {
         'equipmentModel': equipmentModel?.trim(),
         'customEquipment': customEquipment?.trim(),
         'quantity': quantity,
+        if (equipmentItems != null)
+          'items': equipmentItems.map((item) => item.toJson()).toList(),
         'beneficiary': beneficiary.trim(),
         'content': content.trim(),
         if (signaturePng != null)

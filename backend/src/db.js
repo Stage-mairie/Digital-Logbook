@@ -68,4 +68,5 @@ export async function runSqlFile(relativePath) {
 
 export async function ensureDatabaseSchema() {
     await runSqlFile(path.join('sql', '001_schema.sql'));
+    await runSqlFile(path.join('sql', '004_transmission_items.sql'));
 }

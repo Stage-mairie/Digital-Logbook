@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -7,6 +6,8 @@ import '../models/transmission.dart';
 import '../services/auth_service.dart';
 import '../services/transmission_service.dart';
 import 'widgets/return_loan_dialog.dart';
+import 'widgets/history_filters.dart';
+import 'widgets/privacy_notice.dart';
 
 class CahierPage extends StatefulWidget {
   final AuthService auth;
@@ -25,9 +26,11 @@ class _CahierPageState extends State<CahierPage> {
   final Set<String> _returningIds = <String>{};
   late final TransmissionService _service;
   late Future<List<Transmission>> _future;
-  Timer? _debounce;
+  HistoryCategory _category = HistoryCategory.all;
+  int? _year;
 
-  bool get _isSearching => _searchController.text.trim().isNotEmpty;
+  bool get _hasFilters => _searchController.text.trim().isNotEmpty ||
+      _category != HistoryCategory.all || _year != null;
 
   @override
   void initState() {
@@ -38,26 +41,16 @@ class _CahierPageState extends State<CahierPage> {
 
   @override
   void dispose() {
-    _debounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
   void _load() {
-    final query = _searchController.text.trim();
-    _future = query.isEmpty
-        ? _service.getTransmissions(days: 7)
-        : _service.getTransmissions(query: query);
+    // Charge l'historique complet pour permettre les filtres par année.
+    _future = _service.getTransmissions();
   }
 
-  void _onSearchChanged(String value) {
-    setState(() {});
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 350), () {
-      if (!mounted) return;
-      setState(_load);
-    });
-  }
+  void _onSearchChanged(String value) => setState(() {});
 
   Future<void> _refresh() async {
     setState(_load);
@@ -66,8 +59,7 @@ class _CahierPageState extends State<CahierPage> {
 
   void _clearSearch() {
     _searchController.clear();
-    _debounce?.cancel();
-    setState(_load);
+    setState(() {});
   }
 
   Future<void> _markReturned(Transmission transmission) async {
@@ -113,6 +105,13 @@ class _CahierPageState extends State<CahierPage> {
       appBar: AppBar(
         title: const Text('Consulter le cahier'),
         backgroundColor: Colors.white,
+        actions: [
+          IconButton(
+            tooltip: 'Protection des données personnelles',
+            icon: const Icon(Icons.privacy_tip_outlined),
+            onPressed: () => PrivacyNotice.show(context),
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -148,10 +147,23 @@ class _CahierPageState extends State<CahierPage> {
                   ),
                 ),
                 const SizedBox(height: 10),
+                FutureBuilder<List<Transmission>>(
+                  future: _future,
+                  builder: (context, snapshot) => HistoryFilters(
+                    category: _category,
+                    year: _year,
+                    years: historyYears(snapshot.data ?? const []),
+                    onCategoryChanged: (value) => setState(() => _category = value),
+                    onYearChanged: (value) => setState(() => _year = value),
+                    onReset: () => setState(() {
+                      _category = HistoryCategory.all;
+                      _year = null;
+                    }),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 Text(
-                  _isSearching
-                      ? 'Résultats dans tout l’historique'
-                      : 'Historique des 7 derniers jours',
+                  _hasFilters ? 'Résultats filtrés' : 'Historique complet',
                   style: const TextStyle(
                     color: Color(0xFF62818A),
                     fontSize: 13,
@@ -176,7 +188,12 @@ class _CahierPageState extends State<CahierPage> {
                   );
                 }
 
-                final transmissions = snapshot.data ?? const [];
+                final transmissions = filterHistory(
+                  snapshot.data ?? const [],
+                  category: _category,
+                  year: _year,
+                  query: _searchController.text,
+                );
 
                 if (transmissions.isEmpty) {
                   return RefreshIndicator(
@@ -193,9 +210,9 @@ class _CahierPageState extends State<CahierPage> {
                         const SizedBox(height: 16),
                         Center(
                           child: Text(
-                            _isSearching
-                                ? 'Aucun résultat pour cette recherche.'
-                                : 'Aucune opération sur les 7 derniers jours.',
+                            _hasFilters
+                                ? 'Aucun résultat pour ces filtres ou cette recherche.'
+                                : 'Aucune opération enregistrée.',
                             style: const TextStyle(
                               color: Color(0xFF62818A),
                               fontSize: 16,
@@ -279,23 +296,47 @@ class TransmissionCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Wrap(
-              spacing: 10,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _TypeChip(
-                  label: transmission.type.label,
-                  color: accent,
+                Expanded(
+                  child: Wrap(
+                    spacing: 10,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      _TypeChip(
+                        label: transmission.type.label,
+                        color: accent,
+                      ),
+                      if (transmission.type == TransmissionType.pret)
+                        _LoanStatusChip(status: transmission.loanStatus),
+                      Text(
+                        transmission.equipmentLabel,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF214B55),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                if (transmission.type == TransmissionType.pret)
-                  _LoanStatusChip(status: transmission.loanStatus),
-                Text(
-                  transmission.equipmentLabel,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF214B55),
+                const SizedBox(width: 10),
+                Tooltip(
+                  message: 'Téléchargement PDF bientôt disponible',
+                  child: Container(
+                    padding: const EdgeInsets.all(9),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3F9FA),
+                      border: Border.all(color: const Color(0xFFDCEBED)),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.file_download_outlined,
+                      size: 22,
+                      color: Color(0xFF214B55),
+                    ),
                   ),
                 ),
               ],
@@ -327,16 +368,30 @@ class TransmissionCard extends StatelessWidget {
                       spacing: 18,
                     runSpacing: 10,
                     children: [
-                      _InfoLine(
-                        icon: Icons.inventory_2_outlined,
-                        label: 'Quantité : ${transmission.quantity}',
-                      ),
+                      if (transmission.allItems.length == 1)
+                        _InfoLine(
+                          icon: Icons.inventory_2_outlined,
+                          label: 'Quantité : ${transmission.quantity}',
+                        ),
                       _InfoLine(
                         icon: Icons.person_pin_outlined,
                         label: transmission.beneficiary,
                       ),
                     ],
                   ),
+                  if (transmission.allItems.length > 1) ...[
+                    const SizedBox(height: 12),
+                    Text(isDonation ? 'Matériel remis' : 'Matériel prêté',
+                      style: const TextStyle(fontSize: 13,
+                        fontWeight: FontWeight.w700, color: Color(0xFF214B55))),
+                    const SizedBox(height: 6),
+                    for (final item in transmission.allItems)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text('${item.quantity} × ${item.label}',
+                          style: const TextStyle(color: Color(0xFF345D66))),
+                      ),
+                  ],
                   if (transmission.content.trim().isNotEmpty) ...[
                     const SizedBox(height: 14),
                     Text(

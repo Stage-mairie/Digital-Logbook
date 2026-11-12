@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../../models/transmission.dart';
@@ -9,6 +7,8 @@ import '../../services/transmission_service.dart';
 import '../cahier_page.dart';
 import '../login_page.dart';
 import '../widgets/return_loan_dialog.dart';
+import '../widgets/history_filters.dart';
+import '../widgets/privacy_notice.dart';
 
 class HistoriqueWebPage extends StatefulWidget {
   final AuthService auth;
@@ -27,11 +27,18 @@ class _HistoriqueWebPageState extends State<HistoriqueWebPage> {
   final Set<String> _returningIds = <String>{};
   late final TransmissionService _service;
 
-  Timer? _debounce;
   bool _loading = true;
   String? _error;
-  String _appliedQuery = '';
+  HistoryCategory _category = HistoryCategory.all;
+  int? _year;
   List<Transmission> _items = const [];
+
+  List<Transmission> get _visibleItems => filterHistory(
+        _items,
+        category: _category,
+        year: _year,
+        query: _searchController.text,
+      );
 
   @override
   void initState() {
@@ -42,24 +49,22 @@ class _HistoriqueWebPageState extends State<HistoriqueWebPage> {
 
   @override
   void dispose() {
-    _debounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
-  Future<void> _load({String? query}) async {
+  Future<void> _load() async {
     setState(() {
       _loading = true;
       _error = null;
     });
 
     try {
-      final items = await _service.getTransmissions(query: query);
+      final items = await _service.getTransmissions();
       if (!mounted) return;
 
       setState(() {
         _items = items;
-        _appliedQuery = query?.trim() ?? '';
       });
     } catch (e) {
       if (!mounted) return;
@@ -75,24 +80,15 @@ class _HistoriqueWebPageState extends State<HistoriqueWebPage> {
     }
   }
 
-  void _onSearchChanged(String value) {
-    setState(() {}); // Désactive Exporter pendant la temporisation de recherche.
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 350), () {
-      _load(query: value.trim());
-    });
-  }
+  void _onSearchChanged(String value) => setState(() {});
 
   bool get _canExport =>
-      !_loading &&
-      _error == null &&
-      _items.isNotEmpty &&
-      _appliedQuery == _searchController.text.trim();
+      !_loading && _error == null && _visibleItems.isNotEmpty;
 
   void _export(HistoryExportFormat format) {
     if (!_canExport) return;
     try {
-      HistoryExport.export(_items, format);
+      HistoryExport.export(_visibleItems, format);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -175,7 +171,7 @@ class _HistoriqueWebPageState extends State<HistoriqueWebPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Prêt marqué comme rendu.')),
       );
-      await _load(query: _searchController.text.trim());
+      await _load();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -208,7 +204,7 @@ class _HistoriqueWebPageState extends State<HistoriqueWebPage> {
       body: Column(
         children: [
           _WebHeader(
-            onRefresh: () => _load(query: _searchController.text.trim()),
+            onRefresh: _load,
             onLogout: _logout,
           ),
           Expanded(
@@ -238,7 +234,7 @@ class _HistoriqueWebPageState extends State<HistoriqueWebPage> {
                                         onPressed: () {
                                           _searchController.clear();
                                           setState(() {});
-                                          _load();
+                                          // Le filtrage est local : aucune requête réseau.
                                         },
                                         icon: const Icon(Icons.close),
                                       ),
@@ -287,7 +283,24 @@ class _HistoriqueWebPageState extends State<HistoriqueWebPage> {
                           );
                         },
                       ),
-                      const SizedBox(height: 22),
+                      const SizedBox(height: 14),
+                      HistoryFilters(
+                        category: _category,
+                        year: _year,
+                        years: historyYears(_items),
+                        onCategoryChanged: (value) => setState(() => _category = value),
+                        onYearChanged: (value) => setState(() => _year = value),
+                        onReset: () => setState(() {
+                          _category = HistoryCategory.all;
+                          _year = null;
+                        }),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${_visibleItems.length} résultat(s)',
+                        style: const TextStyle(color: Color(0xFF62818A)),
+                      ),
+                      const SizedBox(height: 10),
                       if (_loading) const LinearProgressIndicator(minHeight: 2),
                       const SizedBox(height: 10),
                       Expanded(child: _buildContent()),
@@ -313,7 +326,7 @@ class _HistoriqueWebPageState extends State<HistoriqueWebPage> {
             Text(_error!, textAlign: TextAlign.center),
             const SizedBox(height: 16),
             FilledButton.icon(
-              onPressed: () => _load(query: _searchController.text.trim()),
+              onPressed: _load,
               icon: const Icon(Icons.refresh),
               label: const Text('Réessayer'),
             ),
@@ -322,12 +335,12 @@ class _HistoriqueWebPageState extends State<HistoriqueWebPage> {
       );
     }
 
-    if (!_loading && _items.isEmpty) {
+    if (!_loading && _visibleItems.isEmpty) {
       return Center(
         child: Text(
-          _searchController.text.trim().isEmpty
+          _items.isEmpty
               ? 'Aucune transmission enregistrée.'
-              : 'Aucun résultat pour cette recherche.',
+              : 'Aucun résultat pour ces filtres ou cette recherche.',
           style: const TextStyle(
             fontSize: 16,
             color: Color(0xFF62818A),
@@ -336,12 +349,13 @@ class _HistoriqueWebPageState extends State<HistoriqueWebPage> {
       );
     }
 
+    final visibleItems = _visibleItems;
     return Scrollbar(
       child: ListView.separated(
-        itemCount: _items.length,
+        itemCount: visibleItems.length,
         separatorBuilder: (_, __) => const SizedBox(height: 12),
         itemBuilder: (_, index) {
-          final transmission = _items[index];
+          final transmission = visibleItems[index];
 
           return TransmissionCard(
             transmission: transmission,
@@ -393,6 +407,11 @@ class _WebHeader extends StatelessWidget {
                     color: Color(0xFF214B55),
                   ),
                 ),
+              ),
+              IconButton(
+                tooltip: 'Protection des données personnelles',
+                onPressed: () => PrivacyNotice.show(context),
+                icon: const Icon(Icons.privacy_tip_outlined),
               ),
               IconButton(
                 tooltip: 'Actualiser',

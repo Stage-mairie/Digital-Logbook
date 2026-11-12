@@ -137,6 +137,10 @@ VALUES
     ('don', 'Clavier', '', 30),
     ('don', 'Ordinateur', '', 40),
     ('don', 'Casque audio TT', '', 50),
+    ('don', 'Téléphone IP', '', 60),
+    ('don', 'Câble réseau', '', 65),
+    ('don', 'Câble etiro', '', 70),
+    ('don', 'Écran', '', 80),
     ('don', 'Autre', '', 90)
 ON CONFLICT (transaction_type, category, model) DO NOTHING;
 

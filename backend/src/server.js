@@ -9,6 +9,7 @@ import argon2 from 'argon2';
 import {
     checkDatabase,
     ensureDatabaseSchema,
+    pool,
     query
 } from './db.js';
 
@@ -224,7 +225,13 @@ function rowToTransmission(row) {
         hasSignature: row.has_signature ?? Boolean(row.signature_png),
         signerName: row.signer_name ?? null,
         signedAt: row.signed_at ?? null,
-        createdAt: row.created_at
+        createdAt: row.created_at,
+        equipmentItems: row.equipment_items ?? [{
+            equipmentType: row.equipment_type,
+            equipmentModel: row.equipment_model,
+            customEquipment: row.custom_equipment,
+            quantity: row.quantity
+        }]
     };
 }
 
@@ -441,7 +448,7 @@ app.get('/transmissions', requireSession, async (request, response) => {
     if (search) {
         params.push(`%${search}%`);
         conditions.push(`
-            CONCAT_WS(
+            (CONCAT_WS(
                 ' ',
                 type,
                 equipment_type,
@@ -453,6 +460,12 @@ app.get('/transmissions', requireSession, async (request, response) => {
                 COALESCE(loan_status, ''),
                 COALESCE(return_comment, '')
             ) ILIKE $${params.length}
+            OR EXISTS (
+                SELECT 1 FROM transmission_items ti
+                WHERE ti.transmission_id = transmissions.id
+                  AND CONCAT_WS(' ', ti.equipment_type, ti.equipment_model, ti.custom_equipment)
+                      ILIKE $${params.length}
+            ))
         `);
     }
 
@@ -466,7 +479,17 @@ app.get('/transmissions', requireSession, async (request, response) => {
                quantity, beneficiary, content, author, author_id, loan_status,
                returned_at, returned_by, returned_by_id, return_comment,
                created_at, signer_name, signed_at,
-               (signature_png IS NOT NULL) AS has_signature
+               (signature_png IS NOT NULL) AS has_signature,
+               COALESCE((
+                   SELECT json_agg(json_build_object(
+                       'equipmentType', ti.equipment_type,
+                       'equipmentModel', ti.equipment_model,
+                       'customEquipment', ti.custom_equipment,
+                       'quantity', ti.quantity
+                   ) ORDER BY ti.line_number)
+                   FROM transmission_items ti
+                   WHERE ti.transmission_id = transmissions.id
+               ), '[]'::json) AS equipment_items
         FROM transmissions
         ${where}
         ORDER BY created_at DESC
@@ -613,10 +636,63 @@ app.post('/transmissions', requireSession, async (request, response) => {
         });
     }
 
+    // Anciennes applications : pas de tableau items, la transmission reste valide.
+    // Nouvelles applications : premier élément = matériel principal, puis accessoires.
+    const rawItems = request.body?.items;
+    const equipmentItems = [{
+        equipmentType,
+        equipmentModel: availableModels.length > 0 ? equipmentModel : null,
+        customEquipment: equipmentType === 'Autre' ? customEquipment : null,
+        quantity
+    }];
+    if (rawItems !== undefined) {
+        if (!Array.isArray(rawItems) || rawItems.length < 1 || rawItems.length > 20) {
+            return response.status(400).json({ error: 'Liste de matériels invalide (1 à 20 lignes).' });
+        }
+        const primary = rawItems[0];
+        if (!primary || typeof primary !== 'object' ||
+            String(primary.equipmentType || '').trim() !== equipmentType ||
+            String(primary.equipmentModel || '').trim() !== (availableModels.length > 0 ? equipmentModel : '') ||
+            String(primary.customEquipment || '').trim() !== (equipmentType === 'Autre' ? customEquipment : '') ||
+            Number(primary.quantity) !== quantity) {
+            return response.status(400).json({ error: 'Matériel principal incohérent.' });
+        }
+        const seen = new Set([equipmentType.toLocaleLowerCase('fr')]);
+        for (const raw of rawItems.slice(1)) {
+            if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+                return response.status(400).json({ error: 'Accessoire invalide.' });
+            }
+            const name = typeof raw.equipmentType === 'string' ? raw.equipmentType.trim() : '';
+            const itemQuantity = Number(raw.quantity);
+            const normalized = name.toLocaleLowerCase('fr');
+            if (name.length < 2 || name.length > 80 ||
+                !Number.isInteger(itemQuantity) || itemQuantity < 1 || itemQuantity > 999 ||
+                seen.has(normalized) ||
+                raw.equipmentModel != null && String(raw.equipmentModel).trim() !== '' ||
+                raw.customEquipment != null && String(raw.customEquipment).trim() !== '') {
+                return response.status(400).json({
+                    error: 'Accessoire invalide, en doublon ou quantité hors limites.'
+                });
+            }
+            seen.add(normalized);
+            equipmentItems.push({
+                equipmentType: name,
+                equipmentModel: null,
+                customEquipment: null,
+                quantity: itemQuantity
+            });
+        }
+    }
+
     const loanStatus = type === 'pret' ? 'en_cours' : null;
 
-    const result = await query(
-        `
+    // Une seule transaction SQL : impossible de créer la transmission sans ses accessoires.
+    const client = await pool.connect();
+    let result;
+    try {
+        await client.query('BEGIN');
+        result = await client.query(
+            `
         INSERT INTO transmissions (
             id,
             type,
@@ -655,11 +731,29 @@ app.post('/transmissions', requireSession, async (request, response) => {
             signaturePng == null ? null : signerName,
             signaturePng
         ]
-    );
+        );
+
+        for (let lineNumber = 0; lineNumber < equipmentItems.length; lineNumber++) {
+            const item = equipmentItems[lineNumber];
+            await client.query(
+                `INSERT INTO transmission_items
+                 (transmission_id, line_number, equipment_type, equipment_model, custom_equipment, quantity)
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [result.rows[0].id, lineNumber, item.equipmentType,
+                    item.equipmentModel, item.customEquipment, item.quantity]
+            );
+        }
+        await client.query('COMMIT');
+    } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+    } finally {
+        client.release();
+    }
 
     response.status(201).json({
         ok: true,
-        item: rowToTransmission(result.rows[0])
+        item: rowToTransmission({ ...result.rows[0], equipment_items: equipmentItems })
     });
 });
 

@@ -56,7 +56,7 @@ class HomePage extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Enregistrez un don ou un prêt, ou consultez le cahier des 7 derniers jours.',
+                    'Enregistrez un don ou un prêt, ou consultez l’historique complet.',
                     style: TextStyle(
                       color: Color(0xFF62818A),
                     ),
@@ -111,7 +111,7 @@ class HomePage extends StatelessWidget {
                             width: cardWidth,
                             icon: Icons.menu_book_outlined,
                             title: 'Consulter le cahier',
-                            subtitle: '7 derniers jours + recherche complète',
+                            subtitle: 'Recherche et filtres par opération et année',
                             color: cyan,
                             onTap: () {
                               Navigator.push(

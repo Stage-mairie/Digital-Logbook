@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import 'home_page.dart';
 import 'web/historique_web_page.dart';
+import 'widgets/privacy_notice.dart';
 
 class LoginPage extends StatefulWidget {
   final AuthService auth;
@@ -338,7 +339,9 @@ class _LoginPageState extends State<LoginPage> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 12),
+                      const PrivacyNoticeLink(),
+                      const SizedBox(height: 12),
                     ],
                   ),
                 ),

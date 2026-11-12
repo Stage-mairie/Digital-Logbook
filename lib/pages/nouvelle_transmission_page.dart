@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'widgets/person_suggestion_field.dart';
 import 'widgets/signature_capture.dart';
+import 'widgets/privacy_notice.dart';
 
 import '../models/transmission.dart';
 import '../services/auth_service.dart';
@@ -40,6 +41,8 @@ class _NouvelleTransmissionPageState extends State<NouvelleTransmissionPage> {
   bool _loadingCatalog = true;
   bool _saving = false;
   String? _error;
+  List<_AccessoryDraft> _accessories = [];
+  int _previousMainQuantity = 1;
 
   EquipmentOption? get _selectedOption {
     for (final option in _catalog) {
@@ -64,6 +67,7 @@ class _NouvelleTransmissionPageState extends State<NouvelleTransmissionPage> {
   void initState() {
     super.initState();
     _service = TransmissionService(auth: widget.auth);
+    _quantityController.addListener(_onMainQuantityChanged);
     _loadCatalog();
   }
 
@@ -93,6 +97,7 @@ class _NouvelleTransmissionPageState extends State<NouvelleTransmissionPage> {
         _selectedModel = catalog.isEmpty || catalog.first.models.isEmpty
             ? null
             : catalog.first.models.first;
+        _setDefaultAccessories();
       });
     } catch (e) {
       if (!mounted) return;
@@ -114,11 +119,146 @@ class _NouvelleTransmissionPageState extends State<NouvelleTransmissionPage> {
     setState(() {
       _selectedEquipment = value;
       _selectedModel = option.models.isEmpty ? null : option.models.first;
+      _setDefaultAccessories();
 
       if (value != 'Autre') {
         _customEquipmentController.clear();
       }
     });
+  }
+
+  void _setDefaultAccessories() {
+    final count = int.tryParse(_quantityController.text) ?? 1;
+    _previousMainQuantity = count;
+    _accessories = defaultComputerAccessories(_selectedEquipment ?? '', count)
+        .map((item) => _AccessoryDraft(item.equipmentType, item.quantity))
+        .toList();
+  }
+
+  void _onMainQuantityChanged() {
+    final count = int.tryParse(_quantityController.text);
+    if (count == null || count < 1 || count > 999 ||
+        count == _previousMainQuantity) return;
+    final previous = _previousMainQuantity;
+    _previousMainQuantity = count;
+    if (_accessories.isEmpty || !mounted) return;
+    setState(() {
+      for (final accessory in _accessories) {
+        // Suivre la quantité principale uniquement si non personnalisée.
+        if (accessory.quantity == previous) accessory.quantity = count;
+      }
+    });
+  }
+
+  Future<void> _addAccessory() async {
+    if (_accessories.length >= 19) return;
+    var accessoryName = '';
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Ajouter un accessoire'),
+        content: TextField(
+          autofocus: true,
+          maxLength: 80,
+          onChanged: (value) => accessoryName = value,
+          decoration: const InputDecoration(
+            labelText: 'Désignation',
+            hintText: 'Ex. Câble HDMI',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, accessoryName.trim()),
+            child: const Text('Ajouter'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || name == null) return;
+    if (name.length < 2 ||
+        name.toLowerCase() == (_selectedEquipment ?? '').toLowerCase() ||
+        _accessories.any((item) => item.name.toLowerCase() == name.toLowerCase())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Désignation invalide ou déjà présente.')),
+      );
+      return;
+    }
+    setState(() {
+      _accessories.add(_AccessoryDraft(
+        name, int.tryParse(_quantityController.text) ?? 1,
+      ));
+    });
+  }
+
+  Widget _accessoriesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Accessoires remis avec le matériel',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 5),
+        const Text('Pour un ordinateur : souris, sacoche et chargeur sont cochés par défaut. '
+            'Décochez ce qui n’est pas remis.',
+            style: TextStyle(color: Color(0xFF62818A), fontSize: 12)),
+        const SizedBox(height: 10),
+        for (final accessory in _accessories)
+          Padding(
+            key: ValueKey(accessory.name),
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFFDCEBED)),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Checkbox(
+                    value: accessory.selected,
+                    onChanged: _saving ? null : (value) => setState(() {
+                      accessory.selected = value ?? false;
+                    }),
+                  ),
+                  Expanded(child: Text(accessory.name,
+                      maxLines: 2, overflow: TextOverflow.ellipsis)),
+                  IconButton(
+                    tooltip: 'Retirer une unité de ${accessory.name}',
+                    onPressed: _saving || !accessory.selected || accessory.quantity <= 1
+                        ? null
+                        : () => setState(() => accessory.quantity--),
+                    icon: const Icon(Icons.remove_circle_outline, size: 20),
+                  ),
+                  Text('${accessory.quantity}',
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  IconButton(
+                    tooltip: 'Ajouter une unité de ${accessory.name}',
+                    onPressed: _saving || !accessory.selected || accessory.quantity >= 999
+                        ? null
+                        : () => setState(() => accessory.quantity++),
+                    icon: const Icon(Icons.add_circle_outline, size: 20),
+                  ),
+                  IconButton(
+                    tooltip: 'Supprimer ${accessory.name}',
+                    onPressed: _saving ? null : () => setState(() => _accessories.remove(accessory)),
+                    icon: const Icon(Icons.close, size: 17),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: _saving || _accessories.length >= 19 ? null : _addAccessory,
+            icon: const Icon(Icons.add),
+            label: const Text('Ajouter un accessoire'),
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _save() async {
@@ -161,6 +301,19 @@ class _NouvelleTransmissionPageState extends State<NouvelleTransmissionPage> {
         equipmentModel: _selectedModel,
         customEquipment: _isOther ? _customEquipmentController.text : null,
         quantity: int.parse(_quantityController.text),
+        equipmentItems: [
+          TransmissionItem(
+            equipmentType: _selectedEquipment!,
+            equipmentModel: _selectedModel,
+            customEquipment: _isOther ? _customEquipmentController.text : null,
+            quantity: int.parse(_quantityController.text),
+          ),
+          ..._accessories.where((accessory) => accessory.selected).map(
+                (accessory) => TransmissionItem(
+                  equipmentType: accessory.name, quantity: accessory.quantity,
+                ),
+              ),
+        ],
         beneficiary: _beneficiaryController.text,
         content: _contentController.text,
         signerName: signaturePng == null ? null : _signerController.text,
@@ -394,6 +547,8 @@ class _NouvelleTransmissionPageState extends State<NouvelleTransmissionPage> {
               return null;
             },
           ),
+          const SizedBox(height: 18),
+          _accessoriesSection(),
           const SizedBox(height: 16),
           PersonSuggestionField(
             controller: _beneficiaryController,
@@ -417,6 +572,8 @@ class _NouvelleTransmissionPageState extends State<NouvelleTransmissionPage> {
               border: OutlineInputBorder(),
             ),
           ),
+          const SizedBox(height: 12),
+          const PrivacyFormInfo(),
           const SizedBox(height: 12),
           const Divider(),
           const SizedBox(height: 10),
@@ -477,4 +634,12 @@ class _NouvelleTransmissionPageState extends State<NouvelleTransmissionPage> {
       ),
     );
   }
+}
+
+class _AccessoryDraft {
+  final String name;
+  int quantity;
+  bool selected;
+
+  _AccessoryDraft(this.name, this.quantity, {this.selected = true});
 }
