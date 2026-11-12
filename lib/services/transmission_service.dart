@@ -187,6 +187,29 @@ class TransmissionService {
     return response.bodyBytes;
   }
 
+  // Reçu PDF généré par le backend : token en en-tête, jamais dans l'URL.
+  Future<Uint8List> getReceiptPdf(String id) async {
+    final response = await http.get(
+      Uri.parse('${ApiConfig.baseUrl}/transmissions/$id/receipt.pdf'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 401) {
+      throw const TransmissionException('Session expirée. Reconnectez-vous.');
+    }
+    if (response.statusCode != 200) {
+      throw TransmissionException(_readError(response,
+          fallback: 'Impossible de récupérer le PDF (${response.statusCode}).'));
+    }
+    if (response.bodyBytes.length < 8 ||
+        response.bodyBytes[0] != 0x25 ||
+        response.bodyBytes[1] != 0x50 ||
+        response.bodyBytes[2] != 0x44 ||
+        response.bodyBytes[3] != 0x46) {
+      throw const TransmissionException('Le serveur n’a pas envoyé de fichier PDF valide.');
+    }
+    return response.bodyBytes;
+  }
+
   Future<Transmission> markLoanReturned(
     String id, {
     String returnComment = '',

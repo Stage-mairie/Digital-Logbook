@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import argon2 from 'argon2';
+import { generateReceiptPdf } from './receipt_pdf.js';
 
 import {
     checkDatabase,
@@ -523,6 +524,46 @@ app.get('/transmissions/:id/signature', requireSession, async (request, response
     response.setHeader('Cache-Control', 'private, no-store, max-age=0');
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.type('png').send(result.rows[0].signature_png);
+});
+
+// PDF privé généré à la demande : même authentification que l'historique.
+// Aucune copie du PDF n'est ajoutée à la base ni enregistrée sur disque.
+app.get('/transmissions/:id/receipt.pdf', requireSession, async (request, response) => {
+    const id = String(request.params.id || '');
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+        return response.status(400).json({ error: 'Identifiant invalide.' });
+    }
+    const result = await query(
+        `SELECT id, type, equipment_type, equipment_model, custom_equipment,
+                quantity, beneficiary, content, author, loan_status,
+                returned_at, returned_by, return_comment, created_at,
+                signer_name, signed_at, signature_png
+         FROM transmissions WHERE id = $1`,
+        [id]
+    );
+    if (result.rowCount === 0) {
+        return response.status(404).json({ error: 'Transmission introuvable.' });
+    }
+    const record = result.rows[0];
+    // Le PDF ne doit jamais permettre de contourner la politique des signatures.
+    if (record.signature_png && !signaturesEnabled) {
+        return response.status(403).json({ error: 'Consultation des signatures désactivée.' });
+    }
+    const equipment = await query(
+        `SELECT equipment_type, equipment_model, custom_equipment, quantity
+         FROM transmission_items WHERE transmission_id = $1 ORDER BY line_number ASC`,
+        [id]
+    );
+    const pdf = generateReceiptPdf(record, equipment.rows, record.signature_png);
+    const date = new Date(record.created_at);
+    const datePart = Number.isNaN(date.getTime()) ? 'sans-date' : date.toISOString().slice(0, 10);
+    const name = `Bon_${record.type}_${datePart}_${id.slice(0, 8)}.pdf`;
+    response.setHeader('Cache-Control', 'private, no-store, max-age=0');
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    response.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+    response.setHeader('Content-Type', 'application/pdf');
+    response.setHeader('Content-Length', String(pdf.length));
+    return response.status(200).send(pdf);
 });
 
 app.post('/transmissions', requireSession, async (request, response) => {

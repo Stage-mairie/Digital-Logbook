@@ -6,6 +6,7 @@ import '../models/transmission.dart';
 import '../services/auth_service.dart';
 import '../services/transmission_service.dart';
 import 'widgets/return_loan_dialog.dart';
+import 'widgets/receipt_download_button.dart';
 import 'widgets/history_filters.dart';
 import 'widgets/privacy_notice.dart';
 
@@ -236,6 +237,7 @@ class _CahierPageState extends State<CahierPage> {
                       return TransmissionCard(
                         transmission: transmission,
                         signatureLoader: _service.getSignature,
+                        receiptService: _service,
                         markingReturned:
                             _returningIds.contains(transmission.id),
                         onMarkReturned: transmission.isActiveLoan
@@ -259,6 +261,7 @@ class TransmissionCard extends StatelessWidget {
   final VoidCallback? onMarkReturned;
   final bool markingReturned;
   final Future<Uint8List> Function(String id)? signatureLoader;
+  final TransmissionService? receiptService;
 
   const TransmissionCard({
     super.key,
@@ -266,6 +269,7 @@ class TransmissionCard extends StatelessWidget {
     this.onMarkReturned,
     this.markingReturned = false,
     this.signatureLoader,
+    this.receiptService,
   });
 
   String _date(DateTime date) {
@@ -323,22 +327,11 @@ class TransmissionCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 10),
-                Tooltip(
-                  message: 'Téléchargement PDF bientôt disponible',
-                  child: Container(
-                    padding: const EdgeInsets.all(9),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF3F9FA),
-                      border: Border.all(color: const Color(0xFFDCEBED)),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.file_download_outlined,
-                      size: 22,
-                      color: Color(0xFF214B55),
-                    ),
+                if (receiptService != null)
+                  ReceiptDownloadButton(
+                    transmission: transmission,
+                    service: receiptService!,
                   ),
-                ),
               ],
             ),
             const SizedBox(height: 6),
